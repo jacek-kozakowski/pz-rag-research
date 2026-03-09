@@ -1,0 +1,22 @@
+# LLM
+langchain
+langgraph
+langchain-openai
+openai
+
+langchain-community
+chromadb
+sentence-transformers
+pypdf
+python-docx
+
+duckduckgo-search
+
+icalendar
+
+streamlit
+
+python-dotenv
+pydantic
+uvicorn
+fastapi
