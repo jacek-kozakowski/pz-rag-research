@@ -1,9 +1,11 @@
-# LLM
 langchain
 langgraph
 langchain-openai
 openai
 
+langchain-huggingface
+langchain-chroma
+langchain-text-splitters
 langchain-community
 chromadb
 sentence-transformers

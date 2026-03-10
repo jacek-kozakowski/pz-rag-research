@@ -4,3 +4,7 @@
 __pycache__/
 *.pyc
 .venv
+./chroma_db
+
+chroma/
+test_data
