@@ -3,7 +3,6 @@ langgraph
 langchain-openai
 openai
 
-langchain-huggingface
 langchain-chroma
 langchain-text-splitters
 langchain-community

@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-docs = load_file("")
+docs = load_file("test_data/systemy_operacyjne.pdf")
 
 chunks = split_documents(docs)
 
