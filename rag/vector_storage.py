@@ -54,6 +54,8 @@ def load_db():
         raise FileNotFoundError(f"Chroma DB not found at {CHROMA_PATH}. Run save_to_db first.")
     return Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
 
+
+# k - number of results to return
 def search(query: str, k: int = 3):
     db = load_db()
-    return db.similarity_search(query)
+    return db.similarity_search(query, k=k)
