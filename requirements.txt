@@ -1,6 +1,11 @@
+langchain-classic
 langchain
 langgraph
 langchain-openai
+langchain-huggingface
+langchain-groq
+langchain-core
+
 openai
 
 langchain-chroma
