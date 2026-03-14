@@ -17,7 +17,7 @@ pypdf
 python-docx
 
 duckduckgo-search
-
+ddgs
 icalendar
 
 streamlit

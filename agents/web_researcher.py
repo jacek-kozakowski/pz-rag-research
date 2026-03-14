@@ -20,6 +20,7 @@ Answer:"""
 def web_search_raw(query: str, k: int = 3):
     if os.getenv("TAVILY_API_KEY"):
         try:
+            print("Using Tavily search")
             search = TavilySearch(max_results=k)
             results = search.run(query)
             context = "\n\n---\n\n".join(r["content"] for r in results)
@@ -28,6 +29,7 @@ def web_search_raw(query: str, k: int = 3):
             print("Tavily search failed. Falling back to DuckDuckGo.")
 
     try:
+        print("Fallback model. Using DuckDuckGo.")
         context = DuckDuckGoSearchRun().run(query)
         return context, "duckduckgo"
     except Exception as e:
