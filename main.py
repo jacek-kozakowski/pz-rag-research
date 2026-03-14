@@ -4,6 +4,7 @@ from rag.splitter import split_documents
 from rag.vector_storage import save_to_db
 from agents.local_researcher import ask_local
 from agents.web_researcher import web_search
+from agents.summarizer import summarize
 
 load_dotenv()
 
@@ -13,12 +14,9 @@ chunks = split_documents(docs)
 
 save_to_db(chunks, source_file="systemy_operacyjne.pdf")
 
-question = "Wytłumacz wielowątkowość w programowaniu"
-result_rag = ask_local(question)
-result_web = web_search(question)
+question = "Wielowątkowość w programowaniu"
+local = ask_local(question)
+web = web_search(question)
+summary = summarize(question, local, web)
 
-print("ODPOWIEDŹ local:")
-print(result_rag["answer"])
-
-print("ODPOWIEDŹ web:")
-print(result_web["answer"])
+print(summary['summary'])

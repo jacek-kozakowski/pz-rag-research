@@ -22,11 +22,12 @@ def web_search_raw(query: str, k: int = 3):
         try:
             print("Using Tavily search")
             search = TavilySearch(max_results=k)
-            results = search.run(query)
+            results = search.invoke(query)
             context = "\n\n---\n\n".join(r["content"] for r in results)
             return context, "tavily"
         except Exception as e:
             print("Tavily search failed. Falling back to DuckDuckGo.")
+            print(f"Exception: {e}")
 
     try:
         print("Fallback model. Using DuckDuckGo.")
