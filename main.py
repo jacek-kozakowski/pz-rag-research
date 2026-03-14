@@ -3,6 +3,7 @@ from rag.loader import load_file
 from rag.splitter import split_documents
 from rag.vector_storage import save_to_db
 from agents.local_researcher import ask_local
+from agents.web_researcher import web_search
 
 load_dotenv()
 
@@ -12,12 +13,12 @@ chunks = split_documents(docs)
 
 save_to_db(chunks, source_file="systemy_operacyjne.pdf")
 
-result = ask_local("jakie algorytmy sortowania zostały omówione?")
+question = "Wytłumacz wielowątkowość w programowaniu"
+result_rag = ask_local(question)
+result_web = web_search(question)
 
-print("ODPOWIEDŹ:")
-print(result["answer"])
+print("ODPOWIEDŹ local:")
+print(result_rag["answer"])
 
-print("\nŹRÓDŁA:")
-for i, src in enumerate(result["sources"]):
-    print(f"\n--- Fragment {i+1} ---")
-    print(src)
+print("ODPOWIEDŹ web:")
+print(result_web["answer"])
