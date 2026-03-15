@@ -3,7 +3,7 @@ from agents import get_llm
 
 PROMPT_TEMPLATE = """
 You are a research assistant. Your task is to combine and summarize information from two sources into a single coherent report.
-
+IMPORTANT: Use the same language as the question.
 Local documents research:
 {local_answer}
 

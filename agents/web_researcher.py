@@ -23,7 +23,14 @@ def web_search_raw(query: str, k: int = 3):
             print("Using Tavily search")
             search = TavilySearch(max_results=k)
             results = search.invoke(query)
-            context = "\n\n---\n\n".join(r["content"] for r in results)
+
+            if isinstance(results, dict):
+                items = results.get("results", [])
+                context = "\n\n---\n\n".join(r["content"] for r in items)
+            elif isinstance(results, list):
+                context = "\n\n---\n\n".join(r["content"] for r in results)
+            else:
+                context = str(results)
             return context, "tavily"
         except Exception as e:
             print("Tavily search failed. Falling back to DuckDuckGo.")

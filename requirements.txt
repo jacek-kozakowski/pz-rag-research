@@ -5,6 +5,7 @@ langchain-openai
 langchain-huggingface
 langchain-groq
 langchain-core
+langchain-ollama
 
 openai
 

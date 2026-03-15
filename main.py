@@ -11,7 +11,7 @@ chunks = split_documents(docs)
 
 save_to_db(chunks, source_file="systemy_operacyjne.pdf")
 
-question = "Wielowątkowość w programowaniu"
+question = "Jak działa wielowątkowość w programowaniu? Pokaż przykłady."
 
 graph = build_graph()
 result = graph.invoke({"query": question})
