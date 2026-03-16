@@ -1,11 +1,14 @@
 from dotenv import load_dotenv
-from rag.loader import load_file
+from rag.loader import load_file, load_from_minio
 from rag.splitter import split_documents
 from rag.vector_storage import save_to_db
 from agents.graph import build_graph
+from rag.minio_storage import upload_file
 load_dotenv()
 
-docs = load_file("test_data/systemy_operacyjne.pdf")
+upload_file("test_data/systemy_operacyjne.pdf", "system_operacyjne.pdf")
+
+docs = load_from_minio("system_operacyjne.pdf")
 
 chunks = split_documents(docs)
 

@@ -27,3 +27,5 @@ python-dotenv
 pydantic
 uvicorn
 fastapi
+
+boto3

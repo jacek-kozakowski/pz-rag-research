@@ -17,3 +17,16 @@ def load_file(file_path: str):
     docs = loader.load()
     print(f"Loaded {len(docs)} pages/sections from {file_path}")
     return docs
+
+
+def load_from_minio(filename: str):
+    from rag.minio_storage import download_to_temp
+
+    tmp_path = download_to_temp(filename)
+    try:
+        docs = load_file(tmp_path)
+        for doc in docs:
+            doc.metadata['source'] = filename
+        return docs
+    finally:
+        os.unlink(tmp_path)
