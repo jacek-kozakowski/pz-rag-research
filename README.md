@@ -1,4 +1,28 @@
+## Set Up
+
+### Pobranie requirements
+```bash
+pip install -r requirements.txt
+```
+### Wypełnienie pliku .env
+Zgodnie z plikiem .env.example i [API_MANUAL](API_MANUAL.md)
+### Pobranie ollama 
+1. Pobranie ollamy - Package manager albo ze strony
+2. Pobranie modelu 
+```bash
+ollama pull llama3.2
+```
+### Włączenie minio w dockerze
+```bash
+docker compose up -d
+```
+
+### Włączenie aplikacji Streamlit
+```bash
+streamlit run ui/app.py
+```
 ## Struktura projektu
+
 ```
 multi-agent-research/
 │
