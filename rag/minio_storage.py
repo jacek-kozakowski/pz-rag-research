@@ -37,7 +37,7 @@ def upload_bytes(data: bytes, filename: str) -> str:
     client = get_minio_client()
     try:
         import io
-        client.upload_bytes(io.BytesIO(data), MINIO_BUCKET_NAME, filename)
+        client.upload_fileobj(io.BytesIO(data), MINIO_BUCKET_NAME, filename)
         return filename
     except Exception as e:
         print(f"Failed to upload {filename} to {MINIO_BUCKET_NAME}: {e}")
