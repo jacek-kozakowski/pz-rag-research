@@ -47,7 +47,6 @@ if run and query:
 
 if "result" in st.session_state:
     result = st.session_state["result"]
-
     st.markdown("#### Summary")
     st.markdown(f'<div class="result-box">{result["summary"]}</div>', unsafe_allow_html=True)
 
@@ -66,3 +65,39 @@ if "result" in st.session_state:
         src_tag = web.get("source", "")
         if src_tag:
             st.markdown(f'<span class="source-tag">{src_tag}</span>', unsafe_allow_html=True)
+
+    plan = result.get("tasks", [])
+    if plan:
+        st.markdown("#### Plan")
+        priority_colors = {"high": "#ff6b6b", "medium": "#ffd93d", "low": "#6bcb77"}
+
+        for i, task in enumerate(plan):
+            priority = task.get("priority", "medium")
+            color = priority_colors.get(priority, "#555")
+
+            st.markdown(f"""
+                <div class="result-box" style="margin-bottom:0.5rem; border-left: 3px solid {color};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-family:'DM Mono',monospace; font-size:0.75rem; color:#555;">
+                            {i + 1:02d}
+                        </span>
+                        <span class="source-tag" style="color:{color}; border-color:{color};">
+                            {priority}
+                        </span>
+                    </div>
+                    <div style="font-weight:500; margin: 0.4rem 0 0.2rem;">
+                        {task.get("title", "")}
+                    </div>
+                    <div style="font-size:0.85rem; color:#888; margin-bottom:0.5rem;">
+                        {task.get("description", "")}
+                    </div>
+                    <div style="display:flex; gap:1rem;">
+                        <span style="font-family:'DM Mono',monospace; font-size:0.72rem; color:#555;">
+                            📅 {task.get("deadline", "")}
+                        </span>
+                        <span style="font-family:'DM Mono',monospace; font-size:0.72rem; color:#555;">
+                            ⏱ {task.get("duration_minutes", "")} min
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)

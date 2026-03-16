@@ -10,3 +10,4 @@ class AgentState(TypedDict):
     local_result: dict
     web_result: dict
     summary: str
+    tasks: list[dict]

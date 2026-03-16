@@ -6,15 +6,28 @@ import os
 def get_llm(temperature: float = 0.0, task:str = "default"):
     """
     task = default => main llm for responses
-    task = planner => llm for planning queries
+    task = query_planner => llm for planning queries
+    task = task_planner => llm for task planning
     temperature = 0.0 => deterministic responses
     """
-    if task == "planner":
+    if task == "task_planner":
+        temperature = min(max(temperature, 0.3), 0.99)
+        if os.getenv("OPENAI_API_KEY"):
+            print("Using OpenAI API for task planner")
+            return ChatOpenAI(model="gpt-4o", temperature=temperature)
+        elif os.getenv("GROQ_API_KEY"):
+            print("Using Groq API for task planner")
+            return ChatGroq(model="llama-3.1-70b-versatile", temperature=temperature)
+        elif _ollama_available():
+            print("Using Ollama API for task planner")
+            return ChatOllama(model="mistral", temperature=temperature)
+
+    if task == "query_planner":
         if _ollama_available():
-            print("Using Ollama API")
+            print("Using Ollama API for query planner")
             return ChatOllama(model="llama3.2", temperature=temperature)
         elif os.getenv("GROQ_API_KEY"):
-            print("Using Groq API for planner")
+            print("Using Groq API for query planner")
             return ChatGroq(model="llama-3.1-8b-instant", temperature=temperature)
 
     if os.getenv("OPENAI_API_KEY"):

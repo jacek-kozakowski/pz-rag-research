@@ -20,7 +20,7 @@ Respond ONLY with valid JSON, no other text:
 }}"""
 
 def plan_queries(query: str) -> dict:
-    llm = get_llm(task="planner")
+    llm = get_llm(task="query_planner")
     prompt = PromptTemplate(
         template=PROMPT_TEMPLATE,
         input_variables=["query", "language"],
