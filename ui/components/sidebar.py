@@ -1,8 +1,8 @@
 import streamlit as st
 from rag.loader import load_from_minio
 from rag.splitter import split_documents
-from rag.vector_storage import save_to_db, get_indexed_files
-from rag.minio_storage import upload_bytes, list_files
+from rag.vector_storage import save_to_db, get_indexed_files, delete_from_db
+from rag.minio_storage import upload_bytes, list_files, delete_file
 
 def render_sidebar() -> dict:
     """Renderuje sidebar, zwraca ustawienia jako dict"""
@@ -43,10 +43,21 @@ def render_sidebar() -> dict:
                 for f in minio_files:
                     is_indexed = f in indexed
                     dot_class = "indexed-dot active" if is_indexed else "indexed-dot"
-                    st.markdown(
-                        f'<div class="file-item"><span class="{dot_class}"></span>{f}</div>',
-                        unsafe_allow_html=True
-                    )
+
+                    col1, col2 = st.columns([5, 1])
+                    with col1:
+                        st.markdown(
+                            f'<div class="file-item"><span class="{dot_class}"></span>{f}</div>',
+                            unsafe_allow_html=True
+                        )
+                    with col2:
+                        if st.button("✕", key=f"del_{f}"):
+                            try:
+                                delete_file(f)  # usuń z MinIO
+                                delete_from_db(f)  # usuń z Chroma
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
         except Exception:
             st.markdown('<div class="file-item">minio unavailable</div>', unsafe_allow_html=True)
 

@@ -84,3 +84,18 @@ def load_db():
 def search(query: str, k: int = 3):
     db = load_db()
     return db.similarity_search(query, k=k)
+
+
+def delete_from_db(source_file: str):
+    db = load_db()
+    results = db.get()
+    ids_to_delete = [
+        id for id, meta in zip(results["ids"], results["metadatas"])
+        if meta.get("source") == source_file
+    ]
+
+    if ids_to_delete:
+        db.delete(ids_to_delete)
+        print(f"Deleted {len(ids_to_delete)} chunks from Chroma")
+    else:
+        print(f"No chunks found for source file {source_file}")

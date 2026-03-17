@@ -4,14 +4,24 @@ from agents import get_llm
 from langdetect import detect
 
 PROMPT_TEMPLATE = """
-You are a research query planner. Given a user question, generate optimized search queries.
+You are a research query planner. Given a user goal, extract the core topic and generate optimized search queries.
 
-User question: {query}
+User goal: {query}
 Detected language: {language}
 
-Generate two search queries:
-- rag_query: optimized for searching local documents, MUST be in {language} language
-- web_query: optimized for web search, ALWAYS in English (more results available)
+Instructions:
+- Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
+- rag_query: specific technical terms for searching local documents, in {language}
+- web_query: precise technical search query in English, include specific technologies, APIs, frameworks mentioned
+
+Examples:
+User: "I want to learn Bluetooth programming on Windows by Thursday"
+rag_query: "Bluetooth programowanie Windows API"
+web_query: "Bluetooth programming Windows Sockets API tutorial C Python"
+
+User: "Chcę się przygotować do kolokwium z systemów operacyjnych"  
+rag_query: "systemy operacyjne procesy wątki pamięć"
+web_query: "operating systems processes threads memory management exam"
 
 Respond ONLY with valid JSON, no other text:
 {{
