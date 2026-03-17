@@ -1,25 +1,24 @@
 from langchain_core.prompts import PromptTemplate
 from agents import get_llm
 
-PROMPT_TEMPLATE = """
-You are a research assistant. Your task is to combine and summarize information from two sources into a single coherent report.
-IMPORTANT: Use the same language as the question.
-Local documents research:
+PROMPT_TEMPLATE = """You are a research analyst. Create a comprehensive, detailed report based on the sources below.
+
+User's goal: {query}
+
+Local documents findings:
 {local_answer}
 
-Web research:
+Web research findings:
 {web_answer}
 
-Create a comprehensive summary that:
-- Combines information from both sources
-- Eliminates redundancy
-- Highlights the most important findings
-- Notes any contradictions between sources
+Write a DETAILED report that:
+- Is at least 500 words long
+- Has clear sections with headers (##)
+- Includes specific facts, examples, code snippets if relevant
+- Provides actionable information directly related to the user's goal
+- Cites specific findings from both sources
 
-Question that was researched: {query}
-
-Summary:"""
-
+Report:"""
 def summarize(query: str, local_result: dict, web_result: dict) -> dict:
 
     local_answer = local_result.get('answer', "No information found in local documents")

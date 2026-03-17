@@ -1,4 +1,4 @@
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
+from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, TextLoader
 import os
 
 
@@ -6,7 +6,7 @@ def load_file(file_path: str):
     ext = os.path.splitext(file_path)[-1].lower()
 
     if ext == ".pdf":
-        loader = PyPDFLoader(file_path)
+        loader = PyMuPDFLoader(file_path)
     elif ext == ".docx":
         loader = Docx2txtLoader(file_path)
     elif ext == ".txt":

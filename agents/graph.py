@@ -5,6 +5,7 @@ from agents.web_researcher import web_search
 from agents.summarizer import summarize
 from agents.query_planer import plan_queries
 from agents.planner import plan_task
+from agents.exporter import export_to_md
 
 
 def query_planner_node(state: AgentState) -> AgentState:
@@ -44,6 +45,13 @@ def task_planner_node(state: AgentState) -> AgentState:
         "tasks": tasks
     }
 
+def exporter_node(state: AgentState) -> AgentState:
+    print("Exporter node executing...")
+    path = export_to_md(state['query'], state['summary'], state['tasks'])
+    return {
+        "report_path": path
+    }
+
 def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node('query_planner', query_planner_node)
@@ -51,12 +59,14 @@ def build_graph():
     graph.add_node('web_research', web_search_node)
     graph.add_node('summarization', summarization_node)
     graph.add_node('task_planner', task_planner_node)
+    graph.add_node('exporter', exporter_node)
 
     graph.set_entry_point('query_planner')
     graph.add_edge('query_planner', 'local_research')
     graph.add_edge('local_research', 'web_research')
     graph.add_edge('web_research', 'summarization')
     graph.add_edge('summarization', 'task_planner')
-    graph.add_edge('task_planner', END)
+    graph.add_edge('task_planner', 'exporter')
+    graph.add_edge('exporter', END)
 
     return graph.compile()

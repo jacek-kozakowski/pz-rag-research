@@ -11,3 +11,4 @@ class AgentState(TypedDict):
     web_result: dict
     summary: str
     tasks: list[dict]
+    report_path: str

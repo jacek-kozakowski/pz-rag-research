@@ -47,6 +47,17 @@ if run and query:
 
 if "result" in st.session_state:
     result = st.session_state["result"]
+
+    report_path = result.get("report_path")
+    if report_path and os.path.exists(report_path):
+        with open(report_path, "rb") as f:
+            st.download_button(
+                "⬇ Download Report",
+                f,
+                file_name=os.path.basename(report_path),
+                mime="text/markdown"
+            )
+
     st.markdown("#### Summary")
     st.markdown(f'<div class="result-box">{result["summary"]}</div>', unsafe_allow_html=True)
 
