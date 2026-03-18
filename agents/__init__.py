@@ -23,12 +23,15 @@ def get_llm(temperature: float = 0.0, task:str = "default"):
             return ChatOllama(model="mistral", temperature=temperature)
 
     if task == "query_planner":
-        if _ollama_available():
-            print("Using Ollama API for query planner")
-            return ChatOllama(model="llama3.2", temperature=temperature)
+        if os.getenv("OPENAI_API_KEY"):
+            print("Using OpenAI API for query planner")
+            return ChatOpenAI(model="gpt-4o-mini", temperature=temperature)
         elif os.getenv("GROQ_API_KEY"):
             print("Using Groq API for query planner")
             return ChatGroq(model="llama-3.1-8b-instant", temperature=temperature)
+        elif _ollama_available():
+            print("Using Ollama API for query planner")
+            return ChatOllama(model="mistral", temperature=temperature)
 
     if os.getenv("OPENAI_API_KEY"):
         print("Using OpenAI API")

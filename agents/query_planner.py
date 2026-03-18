@@ -5,25 +5,19 @@ from langdetect import detect
 
 PROMPT_TEMPLATE_RAG = """
 You are a research query planner. Given a user goal, extract the core topic and generate optimized search queries.
-These queries should be optimized for rag search in local documents.
+These queries should be optimized for rag search in local vector database.
 
 User goal: {query}
 Detected language: {language}
 
 Instructions:
 - Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
-- rag_query: list of maximum 5 (less if there is no need for 5) specific technical terms for searching local documents, in {language}
-
-Examples:
-User: "I want to learn Bluetooth programming on Windows by Thursday"
-rag_query: "[Bluetooth, programowanie Windows API]"
-
-User: "Chcę się przygotować do kolokwium z systemów operacyjnych"  
-rag_query: "[systemy operacyjne, procesy, wątki, pamięć]"
+- rag_query: list of maximum 5 (less if there is no need for 5) specific technical terms for searching local documents
+- Queries should be in the same language as the user query, but if the language is not supported, generate queries in English
 
 Respond ONLY with valid JSON, no other text:
 {{
-    "rag_query": "["...", "...", "..."]",
+    "rag_query": ["...", "...", "..."],
 }}"""
 
 PROMPT_TEMPLATE_WEB = """
@@ -34,13 +28,6 @@ User goal: {query}
 Instructions:
 - Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
 - web_query: precise technical search query in English, include specific technologies, APIs, frameworks mentioned
-
-Examples:
-User: "I want to learn Bluetooth programming on Windows by Thursday"
-web_query: "Bluetooth programming Windows Sockets API tutorial C Python"
-
-User: "Chcę się przygotować do kolokwium z systemów operacyjnych"  
-web_query: "operating systems processes threads memory management exam"
 
 Respond ONLY with valid JSON, no other text:
 {{
@@ -56,7 +43,7 @@ def plan_rag_queries(query: str) -> list[str]:
     chain = prompt | llm | JsonOutputParser()
 
     result = chain.invoke({"query": query, "language": _get_query_language(query)})
-
+    print("Planned RAG queries:", result['rag_query'])
     return result['rag_query']
 
 def plan_web_query(query: str) -> str:
@@ -68,6 +55,7 @@ def plan_web_query(query: str) -> str:
 
     chain = prompt | llm | JsonOutputParser()
     result = chain.invoke({"query": query})
+    print("Planned web query:", result['web_query'])
     return result['web_query']
 
 

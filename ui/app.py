@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from agents.graph import build_graph
 from ui.components.styles import inject_css
 from ui.components.sidebar import render_sidebar
+from langchain_core.messages import HumanMessage
 
 load_dotenv()
 
@@ -40,7 +41,8 @@ if run and query:
     with st.spinner("Researching..."):
         try:
             graph = build_graph()
-            result = graph.invoke({"query": query})
+            result = graph.invoke({"query": query,
+                                   "messages": [HumanMessage(content=query)]})
             st.session_state["result"] = result
         except Exception as e:
             st.error(f"Error: {e}")
