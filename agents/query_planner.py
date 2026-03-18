@@ -11,21 +11,21 @@ Detected language: {language}
 
 Instructions:
 - Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
-- rag_query: specific technical terms for searching local documents, in {language}
+- rag_query: list of maximum 5 (less if there is no need for 5) specific technical terms for searching local documents, in {language}
 - web_query: precise technical search query in English, include specific technologies, APIs, frameworks mentioned
 
 Examples:
 User: "I want to learn Bluetooth programming on Windows by Thursday"
-rag_query: "Bluetooth programowanie Windows API"
+rag_query: "[Bluetooth, programowanie Windows API]"
 web_query: "Bluetooth programming Windows Sockets API tutorial C Python"
 
 User: "Chcę się przygotować do kolokwium z systemów operacyjnych"  
-rag_query: "systemy operacyjne procesy wątki pamięć"
+rag_query: "[systemy operacyjne, procesy, wątki, pamięć]"
 web_query: "operating systems processes threads memory management exam"
 
 Respond ONLY with valid JSON, no other text:
 {{
-    "rag_query": "...",
+    "rag_query": "["...", "...", "..."]",
     "web_query": "..."
 }}"""
 

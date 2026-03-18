@@ -2,6 +2,7 @@ from langchain_core.prompts import PromptTemplate
 from agents import get_llm
 
 PROMPT_TEMPLATE = """You are a research analyst. Create a comprehensive, detailed report based on the sources below.
+IMPORTANT: Respond in the same language as the user's question.
 
 User's goal: {query}
 

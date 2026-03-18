@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from rag.loader import load_file, load_from_minio
+from rag.loader import load_from_minio
 from rag.splitter import split_documents
 from rag.vector_storage import save_to_db
 from agents.graph import build_graph

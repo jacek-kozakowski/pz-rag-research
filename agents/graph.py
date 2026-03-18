@@ -3,7 +3,7 @@ from agents.state import AgentState
 from agents.local_researcher import ask_local
 from agents.web_researcher import web_search
 from agents.summarizer import summarize
-from agents.query_planer import plan_queries
+from agents.query_planner import plan_queries
 from agents.planner import plan_task
 from agents.exporter import export_to_md
 
@@ -18,7 +18,8 @@ def query_planner_node(state: AgentState) -> AgentState:
 
 def local_search_node(state: AgentState) -> AgentState:
     print("Local search node executing...")
-    local_result = ask_local(state['rag_query'])
+    rag_queries = state.get('rag_query', [state.get('rag_query', '')])
+    local_result = ask_local(state['query'], rag_queries, k=3)
     return {
         "local_result": local_result
     }
