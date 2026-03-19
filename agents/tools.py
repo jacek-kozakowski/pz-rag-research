@@ -16,7 +16,7 @@ from langchain_core.tools import tool
 
 
 @tool
-def search_local_documents(query: str) -> dict:
+def search_local_documents_tool(query: str) -> dict:
     """
     Searches local documents using the provided RAG query.
     Automatically generates optimized RAG and searches local documents.
@@ -29,7 +29,7 @@ def search_local_documents(query: str) -> dict:
     return ask_local(query, rag_queries)
 
 @tool
-def search_web(query: str) -> dict:
+def search_web_tool(query: str) -> dict:
     """
     Searches the web using the provided web query.
     Automatically generates an optimized web query and searches the web.
