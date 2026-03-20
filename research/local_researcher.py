@@ -2,6 +2,7 @@ from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from rag.vector_storage import search
 from agents import get_llm
+
 PROMPT_TEMPLATE = """
 You are a helpful assistant, answering questions based on the provided documents.
 Use the context below to provide a comprehensive answer.
@@ -23,7 +24,7 @@ def ask_local(query: str, rag_queries: list[str], k: int = 5) -> dict:
     all_docs = []
 
     for q in queries:
-        results = search(q)
+        results = search(q, k=k)
         for doc in results:
             if doc.page_content not in seen:
                 seen.add(doc.page_content)

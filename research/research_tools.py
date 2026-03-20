@@ -22,8 +22,8 @@ def search_local_documents_tool(query: str) -> dict:
     Automatically generates optimized RAG and searches local documents.
     Use when you need to find relevant information in local documents.
     """
-    from agents.local_researcher import ask_local
-    from agents.query_planner import plan_rag_queries
+    from research.local_researcher import ask_local
+    from research.query_planner import plan_rag_queries
 
     rag_queries = plan_rag_queries(query)
     return ask_local(query, rag_queries)
@@ -36,10 +36,9 @@ def search_web_tool(query: str) -> dict:
     Use this AFTER search_local_documents to fill gaps, get additional context,
     or when local documents don't contain sufficient information on the topic.
     """
-    from agents.web_researcher import web_search
-    from agents.query_planner import plan_web_query
+    from research.web_researcher import web_search
+    from research.query_planner import plan_web_query
 
     web_queries = plan_web_query(query)
     return web_search(web_queries)
-
 
