@@ -73,7 +73,11 @@ def should_continue_research(state: AgentState) -> str:
 
 def summarization_node(state: AgentState) -> AgentState:
     print("Summarization node executing...")
-    summary_result = summarize(state['query'], state['local_result'], state['web_result'])
+    summary_result = summarize(
+        state['query'],
+        state.get('local_result', {}),
+        state.get('web_result', {})
+    )
     return {
         "summary": summary_result['summary']
     }
