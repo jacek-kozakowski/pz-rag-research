@@ -88,3 +88,12 @@ def load_codebase(source: str) -> list[Document]:
         return [load_file(source)]
     else:
         raise ValueError(f"Unsupported source type: {source}")
+
+
+def index_codebase(source: str):
+    from rag.vector_storage import save_to_db
+    from rag.splitter import split_documents
+
+    docs = load_codebase(source)
+    chunks = split_documents(docs)
+    save_to_db(chunks, collection_type="code")

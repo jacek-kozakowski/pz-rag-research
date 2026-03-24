@@ -16,7 +16,7 @@ Question:
 """
 
 
-def ask_local(query: str, rag_queries: list[str], k: int = 5) -> dict:
+def ask_local(query: str, rag_queries: list[str], k: int = 5, collection_type: str = "research") -> dict:
     llm = get_llm()
 
     queries = rag_queries if rag_queries else [query]
@@ -24,7 +24,7 @@ def ask_local(query: str, rag_queries: list[str], k: int = 5) -> dict:
     all_docs = []
 
     for q in queries:
-        results = search(q, k=k)
+        results = search(q, k=k, collection_type=collection_type)
         for doc in results:
             if doc.page_content not in seen:
                 seen.add(doc.page_content)
