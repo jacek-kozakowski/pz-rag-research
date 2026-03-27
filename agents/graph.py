@@ -1,4 +1,5 @@
 from langchain_core.messages import SystemMessage
+from langchain_core.prompts import PromptTemplate
 from langgraph.graph import StateGraph, END
 
 from agents import get_llm
@@ -120,6 +121,27 @@ def generate_documentation_node(state: AgentState) -> AgentState:
         "summary": docs
     }
 
+def supervisor_node(state: AgentState) -> AgentState:
+    print("Supervisor node executing...")
+    llm = get_llm()
+    prompt = PromptTemplate(
+        template="Classify this query as either 'research' or 'code'. Return only one word: research or code. Query: {query}",
+        input_variables=["query"]
+    )
+    chain = prompt | llm
+    response = chain.invoke({"query": state["query"]})
+    mode = response.content.strip().lower()
+    
+    # Validation
+    if "code" in mode:
+        mode = "code"
+    else:
+        mode = "research"
+        
+    print(f"Supervisor classified query as: {mode}")
+    return {"mode": mode}
+
+
 def build_research_graph():
     graph = StateGraph(AgentState)
     graph.add_node('research_agent', research_agent_node)
@@ -153,5 +175,25 @@ def build_code_graph():
 
 
 def build_graph():
-    # Temporary return research graph while supervisor is being implemented
-    return build_research_graph()
+    graph = StateGraph(AgentState)
+    
+    # 1. Add supervisor node
+    graph.add_node('supervisor', supervisor_node)
+    
+    # 2. Add sub-graphs as nodes
+    graph.add_node('research_flow', build_research_graph())
+    graph.add_node('code_flow', build_code_graph())
+    
+    # 3. Routing
+    graph.set_entry_point('supervisor')
+    
+    def route_to_flow(state: AgentState) -> str:
+        return f"{state['mode']}_flow"
+        
+    graph.add_conditional_edges('supervisor', route_to_flow)
+    
+    # 4. Exit
+    graph.add_edge('research_flow', END)
+    graph.add_edge('code_flow', END)
+    
+    return graph.compile()

@@ -61,6 +61,14 @@ if "result" in st.session_state:
             )
 
     st.markdown("#### Summary")
+    
+    # Mode Badge
+    mode = result.get("mode", "")
+    if mode == "research":
+        st.info("🔬 Tryb badawczy", icon="🔬")
+    elif mode == "code":
+        st.success("💻 Tryb kodowania", icon="💻")
+
     st.markdown(f'<div class="result-box">{result["summary"]}</div>', unsafe_allow_html=True)
 
     with st.expander("Local Research"):

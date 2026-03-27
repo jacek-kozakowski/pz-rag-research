@@ -10,3 +10,4 @@ class AgentState(TypedDict):
     summary: str
     tasks: list[dict]
     report_path: str
+    mode: str
