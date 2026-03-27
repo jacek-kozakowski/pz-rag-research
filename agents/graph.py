@@ -7,6 +7,7 @@ from research.summarizer import summarize
 from research.planner import plan_task
 from research.exporter import export_to_md
 from research.research_tools import search_local_documents_tool, search_web_tool
+from research.code_tools import generate_code, generate_tests, generate_documentation
 search_tools = [search_local_documents_tool, search_web_tool]
 
 
@@ -98,6 +99,27 @@ def exporter_node(state: AgentState) -> AgentState:
         "report_path": path
     }
 
+def generate_code_node(state: AgentState) -> AgentState:
+    print("Code generator node executing...")
+    code = generate_code(state["query"], language="python")
+    return {
+        "summary": code
+    }
+
+def generate_tests_node(state: AgentState) -> AgentState:
+    print("Test generator node executing...")
+    tests = generate_tests(state["summary"], framework="pytest")
+    return {
+        "summary": tests
+    }
+
+def generate_documentation_node(state: AgentState) -> AgentState:
+    print("Documentation generator node executing...")
+    docs = generate_documentation(state["summary"])
+    return {
+        "summary": docs
+    }
+
 def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node('research_agent', research_agent_node)
@@ -105,6 +127,9 @@ def build_graph():
     graph.add_node('summarization', summarization_node)
     graph.add_node('task_planner', task_planner_node)
     graph.add_node('exporter', exporter_node)
+    graph.add_node('generate_code', generate_code_node)
+    graph.add_node('generate_tests', generate_tests_node)
+    graph.add_node('generate_documentation', generate_documentation_node)
 
     graph.set_entry_point('research_agent')
     graph.add_conditional_edges('research_agent', should_continue_research)
