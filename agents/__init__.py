@@ -36,6 +36,9 @@ def get_llm(temperature: float = 0.0, task:str = "default"):
     if os.getenv("OPENAI_API_KEY"):
         print("Using OpenAI API")
         return ChatOpenAI(model="gpt-4o-mini", temperature=temperature)
+    elif os.getenv("GROQ_API_KEY"):
+        print("Using Groq API")
+        return ChatGroq(model="llama-3.1-8b-instant", temperature=temperature)
     elif _ollama_available():
         print("Using Ollama API")
         return ChatOllama(model="llama3.2", temperature=temperature)
