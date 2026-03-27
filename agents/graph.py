@@ -120,16 +120,13 @@ def generate_documentation_node(state: AgentState) -> AgentState:
         "summary": docs
     }
 
-def build_graph():
+def build_research_graph():
     graph = StateGraph(AgentState)
     graph.add_node('research_agent', research_agent_node)
     graph.add_node('research_tools', research_tools_node_handler)
     graph.add_node('summarization', summarization_node)
     graph.add_node('task_planner', task_planner_node)
     graph.add_node('exporter', exporter_node)
-    graph.add_node('generate_code', generate_code_node)
-    graph.add_node('generate_tests', generate_tests_node)
-    graph.add_node('generate_documentation', generate_documentation_node)
 
     graph.set_entry_point('research_agent')
     graph.add_conditional_edges('research_agent', should_continue_research)
@@ -139,3 +136,22 @@ def build_graph():
     graph.add_edge('exporter', END)
 
     return graph.compile()
+
+
+def build_code_graph():
+    graph = StateGraph(AgentState)
+    graph.add_node('generate_code', generate_code_node)
+    graph.add_node('generate_tests', generate_tests_node)
+    graph.add_node('generate_documentation', generate_documentation_node)
+
+    graph.set_entry_point('generate_code')
+    graph.add_edge('generate_code', 'generate_tests')
+    graph.add_edge('generate_tests', 'generate_documentation')
+    graph.add_edge('generate_documentation', END)
+
+    return graph.compile()
+
+
+def build_graph():
+    # Temporary return research graph while supervisor is being implemented
+    return build_research_graph()
