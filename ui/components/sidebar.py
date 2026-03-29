@@ -3,6 +3,7 @@ from rag.loader import load_from_minio
 from rag.splitter import split_documents
 from rag.vector_storage import save_to_db, get_indexed_files, delete_from_db
 from rag.minio_storage import upload_bytes, list_files, delete_file
+from code.loader import index_codebase
 
 def render_sidebar() -> dict:
     """Renderuje sidebar, zwraca ustawienia jako dict"""
@@ -31,6 +32,17 @@ def render_sidebar() -> dict:
                         st.error(f"Error: {e}")
 
         st.markdown("---")
+        st.markdown("#### Index Codebase")
+        code_path = st.text_input("Path/URL/ZIP", value=".", help="Local path, GitHub URL or ZIP file")
+        if st.button("INDEX CODE →"):
+            with st.spinner("Indexing codebase..."):
+                try:
+                    index_codebase(code_path)
+                    st.success("✓ Code indexed")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+        st.markdown("---")
         st.markdown("#### Indexed Files")
 
         try:
@@ -55,6 +67,27 @@ def render_sidebar() -> dict:
                             try:
                                 delete_file(f)  # usuń z MinIO
                                 delete_from_db(f)  # usuń z Chroma
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+            st.markdown("---")
+            st.markdown("#### Indexed Code")
+            code_indexed = get_indexed_files(collection_type="code")
+            if not code_indexed:
+                st.markdown('<div class="file-item">no code yet</div>', unsafe_allow_html=True)
+            else:
+                for f in code_indexed:
+                    col1, col2 = st.columns([5, 1])
+                    with col1:
+                        st.markdown(
+                            f'<div class="file-item"><span class="indexed-dot active"></span>{f}</div>',
+                            unsafe_allow_html=True
+                        )
+                    with col2:
+                        if st.button("✕", key=f"del_code_{f}"):
+                            try:
+                                delete_from_db(f, collection_type="code")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
