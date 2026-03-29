@@ -30,13 +30,13 @@ def get_embeddings():
 
 
 def get_indexed_files(collection_type: str = "research") -> set:
-    path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
-    if not os.path.exists(path):
+    try:
+        db = load_db(collection_type)
+        results = db.get()
+        sources = {m.get("source") for m in results["metadatas"] if m.get("source")}
+        return sources
+    except FileNotFoundError:
         return set()
-    db = load_db(path)
-    results = db.get()
-    sources = {m.get("source") for m in results["metadatas"] if m.get("source")}
-    return sources
 
 def save_to_db(chunks, source_file: str = None, collection_type: str = "research"):
     indexed = get_indexed_files(collection_type)
@@ -53,10 +53,9 @@ def save_to_db(chunks, source_file: str = None, collection_type: str = "research
     path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
 
     if os.path.exists(path):
-        db = load_db(path)
+        db = load_db(collection_type)
         db.add_documents(chunks)
         print(f"Added {len(chunks)} chunks to existing Chroma DB at {path}")
-        return db
     else:
         db = Chroma.from_documents(
             chunks,
@@ -70,9 +69,8 @@ def save_to_db(chunks, source_file: str = None, collection_type: str = "research
         print(f"Saved {len(chunks)} chunks to Chroma at {path}")
     return db
 
-def load_db(path: str = None):
-    if path is None:
-        path = CHROMA_RESEARCH_PATH
+def load_db(collection_type: str = "research"):
+    path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
 
     if not os.path.exists(path):
         raise FileNotFoundError(f"Chroma DB not found at {path}. Run save_to_db first.")
@@ -89,14 +87,12 @@ def load_db(path: str = None):
 
 # k - number of results to return
 def search(query: str, k: int = 3, collection_type: str = "research"):
-    path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
-    db = load_db(path)
+    db = load_db(collection_type)
     return db.similarity_search(query, k=k)
 
 
 def delete_from_db(source_file: str, collection_type: str = "research"):
-    path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
-    db = load_db(path)
+    db = load_db(collection_type)
     results = db.get()
     ids_to_delete = [
         id for id, meta in zip(results["ids"], results["metadatas"])
