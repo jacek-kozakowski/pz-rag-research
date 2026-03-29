@@ -9,6 +9,8 @@ langchain-ollama
 
 openai
 
+langgraph-supervisor
+
 langchain-chroma
 langchain-text-splitters
 langchain-community

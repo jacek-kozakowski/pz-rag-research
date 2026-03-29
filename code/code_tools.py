@@ -2,32 +2,34 @@ from langchain_core.prompts import PromptTemplate
 from agents import get_llm
 
 CODE_GEN_PROMPT = """
-Wygeneruj kod w języku {language} spełniający wymagania:
+Generate {language} code that fulfills the following requirement:
 {requirement}
 
-Użyj poniższego kontekstu jako punktu odniesienia (jeśli jest istotny):
+Use the context below as reference if relevant:
 {context}
 
-Zwróć TYLKO kod. Nie dodawaj żadnych objaśnień, wstępów ani zakończeń.
+Return ONLY the code. No explanations, no markdown blocks.
 """
 
 TEST_GEN_PROMPT = """
-Wygeneruj testy jednostkowe dla poniższego kodu przy użyciu frameworka {framework}:
+Generate unit tests for the following code using the {framework} framework:
 {code}
 
-Użyj poniższego kontekstu, aby zrozumieć strukturę projektu (jeśli jest istotny):
+Use the context below to understand the project structure if relevant:
 {context}
 
-Zwróć TYLKO kod testów. Nie dodawaj żadnych objaśnień.
+Return ONLY the test code. No explanations, no markdown blocks.
 """
 
 DOC_GEN_PROMPT = """
-Wygeneruj dokumentację techniczną dla poniższego kodu w formacie Markdown.
-Użyj kontekstu, aby lepiej opisać zależności i strukturę (jeśli jest istotny):
+Generate technical documentation for the following code in Markdown format.
+Use the context below to better describe dependencies and structure if relevant:
 {context}
 
-Kod do udokumentowania:
+Code to document:
 {code}
+
+Return ONLY the documentation in Markdown format.
 """
 
 def generate_code(requirement: str, language: str, context: str = "") -> str:
@@ -37,8 +39,8 @@ def generate_code(requirement: str, language: str, context: str = "") -> str:
         input_variables=["language", "requirement", "context"]
     )
     chain = prompt | llm
-    answer = chain.invoke({"language": language, "requirement": requirement, "context": context})
-    return answer.content
+    response = chain.invoke({"language": language, "requirement": requirement, "context": context})
+    return _extract_code(response.content)
 
 def generate_tests(code: str, framework: str, context: str = "") -> str:
     llm = get_llm()
@@ -47,8 +49,8 @@ def generate_tests(code: str, framework: str, context: str = "") -> str:
         input_variables=["framework", "code", "context"]
     )
     chain = prompt | llm
-    answer = chain.invoke({"framework": framework, "code": code, "context": context})
-    return answer.content
+    response = chain.invoke({"framework": framework, "code": code, "context": context})
+    return response.content
 
 def generate_documentation(code: str, context: str = "") -> str:
     llm = get_llm()
@@ -57,5 +59,12 @@ def generate_documentation(code: str, context: str = "") -> str:
         input_variables=["code", "context"]
     )
     chain = prompt | llm
-    answer = chain.invoke({"code": code, "context": context})
-    return answer.content
+    response = chain.invoke({"code": code, "context": context})
+    return response.content
+
+
+def _extract_code(response: str) -> str:
+    import re
+    pattern = r"```(?:\w+)?\n(.*?)```"
+    match = re.search(pattern, response, re.DOTALL)
+    return match.group(1).strip() if match else response.strip()

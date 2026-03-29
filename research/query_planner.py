@@ -8,7 +8,6 @@ You are a research query planner. Given a user goal, extract the core topic and 
 These queries should be optimized for rag search in local vector database.
 
 User goal: {query}
-Detected language: {language}
 
 Instructions:
 - Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
@@ -34,6 +33,18 @@ Respond ONLY with valid JSON, no other text:
     "web_query": "..."
 }}"""
 
+
+PROMPT_CODE_RAG = """Generate 3 specific search queries for searching a codebase.
+User goal: {query}
+
+Rules:
+- Always generate queries in English regardless of input language
+- Focus on technical terms, function names, algorithms, patterns
+- Each query should be 3-6 words long
+
+Return ONLY a JSON list of 3 strings:
+["query1", "query2", "query3"]"""
+
 def plan_rag_queries(query: str) -> list[str]:
     llm = get_llm(task="query_planner")
     prompt = PromptTemplate(
@@ -42,7 +53,7 @@ def plan_rag_queries(query: str) -> list[str]:
     )
     chain = prompt | llm | JsonOutputParser()
 
-    result = chain.invoke({"query": query, "language": _get_query_language(query)})
+    result = chain.invoke({"query": query})
     print("Planned RAG queries:", result['rag_query'])
     return result['rag_query']
 
@@ -57,6 +68,15 @@ def plan_web_query(query: str) -> str:
     result = chain.invoke({"query": query})
     print("Planned web query:", result['web_query'])
     return result['web_query']
+
+def plan_rag_queries_code(query: str) -> list[str]:
+    llm = get_llm(task="query_planner")
+    prompt = PromptTemplate(
+        template=PROMPT_CODE_RAG,
+        input_variables=["query"]
+    )
+    chain = prompt | llm | JsonOutputParser()
+    return chain.invoke({"query": query})
 
 
 def _get_query_language(query: str) -> str:

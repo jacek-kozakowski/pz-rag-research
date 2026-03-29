@@ -7,26 +7,36 @@ from functools import lru_cache
 CHROMA_RESEARCH_PATH = "./chroma_research"
 CHROMA_CODE_PATH = "./chroma_code"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
-HUGGINGFACE_EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+HUGGINGFACE_RESEARCH_MODEL = "intfloat/multilingual-e5-base"
+HUGGINGFACE_CODE_MODEL = "jinaai/jina-embeddings-v2-base-code"
 
 
-def get_current_embedding_model() -> str:
-    return OPENAI_EMBEDDING_MODEL if os.getenv("OPENAI_API_KEY") else HUGGINGFACE_EMBEDDING_MODEL
+def get_current_embedding_model(collection_type: str = "research") -> str:
+    if collection_type == "code":
+        return OPENAI_EMBEDDING_MODEL if os.getenv("OPENAI_API_KEY") else HUGGINGFACE_CODE_MODEL
+    return OPENAI_EMBEDDING_MODEL if os.getenv("OPENAI_API_KEY") else HUGGINGFACE_RESEARCH_MODEL
 
 @lru_cache(maxsize=1)
-def get_embeddings():
-    if os.getenv("OPENAI_API_KEY"):
-        print(f"Using OpenAI embeddings. Model: {OPENAI_EMBEDDING_MODEL}")
-        return OpenAIEmbeddings(
-            model=OPENAI_EMBEDDING_MODEL,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
+def get_embeddings(collection_type: str = "research"):
+    if collection_type == "code":
+        if os.getenv("OPENAI_API_KEY"):
+            print(f"Using OpenAI embeddings. Model: {OPENAI_EMBEDDING_MODEL}")
+            return OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
+        else:
+            print(f"Using HuggingFace code embeddings. Model: {HUGGINGFACE_CODE_MODEL}")
+            return HuggingFaceEmbeddings(
+                model_name=HUGGINGFACE_CODE_MODEL,
+                encode_kwargs={"normalize_embeddings": True}
+            )
     else:
-        print(f"Using HuggingFace embeddings. Model: {HUGGINGFACE_EMBEDDING_MODEL}")
-        return HuggingFaceEmbeddings(
-            model_name=HUGGINGFACE_EMBEDDING_MODEL,
-            encode_kwargs={"normalize_embeddings": True}
-        )
+        if os.getenv("OPENAI_API_KEY"):
+            return OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
+        else:
+            print(f"Using research embeddings: {HUGGINGFACE_RESEARCH_MODEL}")
+            return HuggingFaceEmbeddings(
+                model_name=HUGGINGFACE_RESEARCH_MODEL,
+                encode_kwargs={"normalize_embeddings": True}
+            )
 
 
 def get_indexed_files(collection_type: str = "research") -> set:
@@ -67,15 +77,18 @@ def save_to_db(chunks, source_file: str = None, collection_type: str = "research
             }
         )
         print(f"Saved {len(chunks)} chunks to Chroma at {path}")
+
+    load_db.cache_clear()
     return db
 
+@lru_cache(maxsize=2)
 def load_db(collection_type: str = "research"):
     path = CHROMA_CODE_PATH if collection_type == "code" else CHROMA_RESEARCH_PATH
 
     if not os.path.exists(path):
         raise FileNotFoundError(f"Chroma DB not found at {path}. Run save_to_db first.")
 
-    db = Chroma(persist_directory=path, embedding_function=get_embeddings())
+    db = Chroma(persist_directory=path, embedding_function=get_embeddings(collection_type))
     stored_model = db._collection.metadata.get("embedding_model")
     if stored_model and stored_model != get_current_embedding_model():
         raise ValueError(

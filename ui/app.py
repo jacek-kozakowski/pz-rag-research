@@ -42,6 +42,7 @@ if run and query:
         try:
             graph = build_graph()
             result = graph.invoke({"query": query,
+                                   "mode" : "",
                                    "messages": [HumanMessage(content=query)]})
             st.session_state["result"] = result
         except Exception as e:
@@ -65,11 +66,20 @@ if "result" in st.session_state:
     # Mode Badge
     mode = result.get("mode", "")
     if mode == "research":
-        st.info("🔬 Tryb badawczy", icon="🔬")
+        st.info("🔬 Research mode")
+        st.markdown(f'<div class="result-box">{result.get("summary", "")}</div>', unsafe_allow_html=True)
     elif mode == "code":
-        st.success("💻 Tryb kodowania", icon="💻")
+        st.success("💻 Code mode")
+        # pokaż ostatnią wiadomość z supervisora
+        messages = result.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+            st.markdown(f'<div class="result-box">{content}</div>', unsafe_allow_html=True)
+    elif mode == "spec_and_code":
+        st.warning("📋 Spec + Code mode")
+        st.markdown(f'<div class="result-box">{result.get("summary", "")}</div>', unsafe_allow_html=True)
 
-    st.markdown(f'<div class="result-box">{result["summary"]}</div>', unsafe_allow_html=True)
 
     with st.expander("Local Research"):
         local = result.get("local_result", {})
@@ -122,3 +132,22 @@ if "result" in st.session_state:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+    generated_code = result.get("generated_code", "")
+    generated_tests = result.get("generated_tests", "")
+    generated_docs = result.get("generated_docs", "")
+
+    st.write("DEBUG mode:", result.get("mode"))
+    st.write("DEBUG generated_code:", bool(result.get("generated_code")))
+
+    if generated_code:
+        with st.expander("Generated Code", expanded=True):
+            st.code(generated_code, language="python")
+
+    if generated_tests:
+        with st.expander("Generated Tests"):
+            st.code(generated_tests, language="python")
+
+    if generated_docs:
+        with st.expander("Generated Documentation"):
+            st.markdown(generated_docs)

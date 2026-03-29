@@ -11,3 +11,6 @@ class AgentState(TypedDict):
     tasks: list[dict]
     report_path: str
     mode: str
+    generated_code: str
+    generated_tests: str
+    generated_docs: str

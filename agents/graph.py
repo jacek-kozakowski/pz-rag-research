@@ -8,7 +8,9 @@ from research.summarizer import summarize
 from research.planner import plan_task
 from research.exporter import export_to_md
 from research.research_tools import search_local_documents_tool, search_web_tool
-from research.code_tools import generate_code, generate_tests, generate_documentation
+from agents.code_supervisor import build_code_supervisor
+from agents.code_supervisor import _code_store
+
 search_tools = [search_local_documents_tool, search_web_tool]
 
 
@@ -20,6 +22,14 @@ Your workflow:
 3. When you have enough information, stop calling tools.
 
 Be thorough - collect as much relevant information as possible."""
+
+DECISION_TEMPLATE ="""Classify this query into one of three categories:
+- research: user wants information, explanation, or study plan
+- code: user wants to generate, analyze or modify code
+- spec_and_code: user has specification AND code, wants implementation
+
+Return ONLY one word: research, code, or spec_and_code.
+Query: {query}"""
 
 def research_agent_node(state: AgentState) -> AgentState:
     print("Research agent node executing...")
@@ -100,49 +110,13 @@ def exporter_node(state: AgentState) -> AgentState:
         "report_path": path
     }
 
-def generate_code_node(state: AgentState) -> AgentState:
-    print("Code generator node executing...")
-    context = state.get("local_result", {}).get("answer", "")
-    code = generate_code(state["query"], language="python", context=context)
-    return {
-        "summary": code
-    }
-
-def generate_tests_node(state: AgentState) -> AgentState:
-    print("Test generator node executing...")
-    context = state.get("local_result", {}).get("answer", "")
-    tests = generate_tests(state["summary"], framework="pytest", context=context)
-    return {
-        "summary": tests
-    }
-
-def generate_documentation_node(state: AgentState) -> AgentState:
-    print("Documentation generator node executing...")
-    context = state.get("local_result", {}).get("answer", "")
-    docs = generate_documentation(state["summary"], context=context)
-    return {
-        "summary": docs
-    }
-
-def code_retriever_node(state: AgentState) -> AgentState:
-    print("Code retriever node executing...")
-    from research.local_researcher import ask_local
-    from research.query_planner import plan_rag_queries
-    
-    rag_queries = plan_rag_queries(state["query"])
-    # Specifically search the 'code' collection
-    result = ask_local(state["query"], rag_queries, collection_type="code")
-    
-    return {
-        "local_result": result
-    }
 
 
 def supervisor_node(state: AgentState) -> AgentState:
     print("Supervisor node executing...")
     llm = get_llm()
     prompt = PromptTemplate(
-        template="Classify this query as either 'research' or 'code'. Return only one word: research or code. Query: {query}",
+        template=DECISION_TEMPLATE,
         input_variables=["query"]
     )
     chain = prompt | llm
@@ -150,7 +124,9 @@ def supervisor_node(state: AgentState) -> AgentState:
     mode = response.content.strip().lower()
     
     # Validation
-    if "code" in mode:
+    if "spec_and_code" in mode:
+        mode = "spec_and_code"
+    elif "code" in mode:
         mode = "code"
     else:
         mode = "research"
@@ -168,7 +144,10 @@ def build_research_graph():
     graph.add_node('exporter', exporter_node)
 
     graph.set_entry_point('research_agent')
-    graph.add_conditional_edges('research_agent', should_continue_research)
+    graph.add_conditional_edges('research_agent', should_continue_research,{
+                                    "tools": 'research_tools',
+                                    "summarization": 'summarization'
+                                })
     graph.add_edge('research_tools', 'research_agent')
     graph.add_edge('summarization', 'task_planner')
     graph.add_edge('task_planner', 'exporter')
@@ -177,20 +156,21 @@ def build_research_graph():
     return graph.compile()
 
 
-def build_code_graph():
-    graph = StateGraph(AgentState)
-    graph.add_node('code_retriever', code_retriever_node)
-    graph.add_node('generate_code', generate_code_node)
-    graph.add_node('generate_tests', generate_tests_node)
-    graph.add_node('generate_documentation', generate_documentation_node)
+def extract_code_results_node(state: AgentState) -> AgentState:
 
-    graph.set_entry_point('code_retriever')
-    graph.add_edge('code_retriever', 'generate_code')
-    graph.add_edge('generate_code', 'generate_tests')
-    graph.add_edge('generate_tests', 'generate_documentation')
-    graph.add_edge('generate_documentation', END)
+    return {
+        "generated_code": _code_store.get("code", ""),
+        "generated_tests": _code_store.get("tests", ""),
+        "generated_docs": _code_store.get("docs", "")
+    }
 
-    return graph.compile()
+def route_to_flow(state: AgentState) -> str:
+    mode = state["mode"]
+    if mode == "code":
+        return "code_flow"
+    elif mode == "spec_and_code":
+        return "research_flow"  # research pierwszy, potem code
+    return "research_flow"
 
 
 def build_graph():
@@ -201,18 +181,17 @@ def build_graph():
     
     # 2. Add sub-graphs as nodes
     graph.add_node('research_flow', build_research_graph())
-    graph.add_node('code_flow', build_code_graph())
-    
+    graph.add_node('code_flow', build_code_supervisor())
+    graph.add_node('extract_code', extract_code_results_node)
+
     # 3. Routing
     graph.set_entry_point('supervisor')
-    
-    def route_to_flow(state: AgentState) -> str:
-        return f"{state['mode']}_flow"
-        
+
     graph.add_conditional_edges('supervisor', route_to_flow)
     
     # 4. Exit
     graph.add_edge('research_flow', END)
+    graph.add_edge('code_flow', 'extract_code')
     graph.add_edge('code_flow', END)
     
     return graph.compile()
