@@ -102,24 +102,41 @@ def exporter_node(state: AgentState) -> AgentState:
 
 def generate_code_node(state: AgentState) -> AgentState:
     print("Code generator node executing...")
-    code = generate_code(state["query"], language="python")
+    context = state.get("local_result", {}).get("answer", "")
+    code = generate_code(state["query"], language="python", context=context)
     return {
         "summary": code
     }
 
 def generate_tests_node(state: AgentState) -> AgentState:
     print("Test generator node executing...")
-    tests = generate_tests(state["summary"], framework="pytest")
+    context = state.get("local_result", {}).get("answer", "")
+    tests = generate_tests(state["summary"], framework="pytest", context=context)
     return {
         "summary": tests
     }
 
 def generate_documentation_node(state: AgentState) -> AgentState:
     print("Documentation generator node executing...")
-    docs = generate_documentation(state["summary"])
+    context = state.get("local_result", {}).get("answer", "")
+    docs = generate_documentation(state["summary"], context=context)
     return {
         "summary": docs
     }
+
+def code_retriever_node(state: AgentState) -> AgentState:
+    print("Code retriever node executing...")
+    from research.local_researcher import ask_local
+    from research.query_planner import plan_rag_queries
+    
+    rag_queries = plan_rag_queries(state["query"])
+    # Specifically search the 'code' collection
+    result = ask_local(state["query"], rag_queries, collection_type="code")
+    
+    return {
+        "local_result": result
+    }
+
 
 def supervisor_node(state: AgentState) -> AgentState:
     print("Supervisor node executing...")
@@ -162,11 +179,13 @@ def build_research_graph():
 
 def build_code_graph():
     graph = StateGraph(AgentState)
+    graph.add_node('code_retriever', code_retriever_node)
     graph.add_node('generate_code', generate_code_node)
     graph.add_node('generate_tests', generate_tests_node)
     graph.add_node('generate_documentation', generate_documentation_node)
 
-    graph.set_entry_point('generate_code')
+    graph.set_entry_point('code_retriever')
+    graph.add_edge('code_retriever', 'generate_code')
     graph.add_edge('generate_code', 'generate_tests')
     graph.add_edge('generate_tests', 'generate_documentation')
     graph.add_edge('generate_documentation', END)
