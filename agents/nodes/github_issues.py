@@ -1,0 +1,169 @@
+import os
+import re
+import requests
+
+from agents import get_llm
+from agents.state import AgentState
+
+GITHUB_API = "https://api.github.com"
+
+
+def _get_headers(token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+
+
+def _repo_name_from_query(query: str) -> str:
+    """Uses LLM to generate a concise slug-style repo name from the query."""
+    llm = get_llm()
+    response = llm.invoke(
+        f"Generate a short GitHub repository name (slug) for this project idea:\n\"{query}\"\n\n"
+        f"Rules:\n"
+        f"- Only lowercase letters, digits, and hyphens\n"
+        f"- Max 40 characters\n"
+        f"- No prefix like 'ai-' or 'repo-'\n"
+        f"- English only\n"
+        f"- Return ONLY the slug, nothing else"
+    )
+    slug = response.content.strip().lower()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
+    return slug[:40] or "ai-research-project"
+
+
+def _repo_exists(token: str, full_name: str) -> bool:
+    """Check if a repo actually exists on GitHub."""
+    resp = requests.get(f"{GITHUB_API}/repos/{full_name}", headers=_get_headers(token))
+    return resp.status_code == 200
+
+
+def _create_repo(token: str, query: str) -> str | None:
+    """Creates a new private GitHub repo. Returns 'owner/repo' or None on failure."""
+    repo_name = _repo_name_from_query(query)
+
+    user_resp = requests.get(f"{GITHUB_API}/user", headers=_get_headers(token))
+    if user_resp.status_code != 200:
+        print(f"[GitHub] Failed to fetch user: {user_resp.status_code}")
+        return None
+    owner = user_resp.json()["login"]
+    full_name = f"{owner}/{repo_name}"
+
+    resp = requests.post(
+        f"{GITHUB_API}/user/repos",
+        json={
+            "name": repo_name,
+            "description": re.sub(r'[\x00-\x1f\x7f]', ' ', f"Auto-generated project repo for: {query}")[:350].strip(),
+            "private": True,
+            "auto_init": True
+        },
+        headers=_get_headers(token)
+    )
+
+    if resp.status_code == 201:
+        full_name = resp.json()["full_name"]
+        print(f"[GitHub] Repo created: {full_name}")
+        return full_name
+    elif resp.status_code == 422:
+        print(f"[GitHub] 422 on create — checking if repo '{full_name}' actually exists...")
+        if _repo_exists(token, full_name):
+            print(f"[GitHub] Repo confirmed exists: {full_name}")
+            return full_name
+        else:
+            print(f"[GitHub] Repo does NOT exist despite 422. Response: {resp.text}")
+            return None
+    else:
+        print(f"[GitHub] Failed to create repo: {resp.status_code} {resp.text}")
+        return None
+
+
+def github_issues_node(state: AgentState) -> AgentState:
+    print("GitHub issues node executing...")
+    token = os.getenv("GITHUB_TOKEN")
+
+    if not token:
+        print("GITHUB_TOKEN not set, skipping GitHub issues creation")
+        return {"github_issues": []}
+
+    repo = os.getenv("GITHUB_REPO")
+
+    if not repo and state.get('create_repo'):
+        repo = _create_repo(token, state['query'])
+
+    if not repo:
+        print("No GITHUB_REPO set and repo creation skipped, skipping GitHub issues creation")
+        return {"github_issues": []}
+
+    headers = _get_headers(token)
+    created_issues = []
+
+    for task in state.get('tasks', []):
+        labels = []
+        if duration := task.get('duration_minutes'):
+            labels.append(f"time:{duration}min")
+        if priority := task.get('priority'):
+            labels.append(f"priority:{priority}")
+
+        resp = requests.post(
+            f"{GITHUB_API}/repos/{repo}/issues",
+            json={
+                "title": task.get('title', ''),
+                "body": task.get('description', ''),
+                "labels": labels
+            },
+            headers=headers
+        )
+
+        if resp.status_code == 201:
+            data = resp.json()
+            created_issues.append({
+                "number": data["number"],
+                "title": data["title"],
+                "url": data["html_url"],
+                "repo": repo,
+                "task": task
+            })
+            print(f"[GitHub] Issue #{data['number']} created: {data['title']}")
+        else:
+            print(f"[GitHub] Failed to create issue '{task.get('title', '')}': {resp.status_code} — {resp.text}")
+
+    return {"github_issues": created_issues}
+
+
+def code_snippets_node(state: AgentState) -> AgentState:
+    print("Code snippets node executing...")
+    token = os.getenv("GITHUB_TOKEN")
+    issues = state.get('github_issues', [])
+
+    if not token or not issues:
+        print("No token or no issues, skipping code snippets")
+        return {}
+
+    llm = get_llm()
+
+    for issue in issues:
+        task = issue.get('task', {})
+        repo = issue.get('repo') or os.getenv("GITHUB_REPO")
+        if not repo:
+            continue
+
+        response = llm.invoke(
+            f"Generate a concise starter code snippet in Python for this task:\n"
+            f"Title: {task.get('title', '')}\n"
+            f"Description: {task.get('description', '')}\n\n"
+            f"Provide only the code with minimal comments."
+        )
+
+        comment_body = f"## Starter Code Snippet\n\n```python\n{response.content}\n```"
+        resp = requests.post(
+            f"{GITHUB_API}/repos/{repo}/issues/{issue['number']}/comments",
+            json={"body": comment_body},
+            headers=_get_headers(token)
+        )
+        if resp.status_code == 201:
+            print(f"Added snippet comment to issue #{issue['number']}")
+        else:
+            print(f"Failed to add comment to issue #{issue['number']}: {resp.status_code}")
+
+    return {}

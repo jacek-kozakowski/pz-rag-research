@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated
+from typing import TypedDict, Annotated, Literal
 from langgraph.graph.message import add_messages
 
 
@@ -9,8 +9,9 @@ class AgentState(TypedDict):
     web_result: dict
     summary: str
     tasks: list[dict]
-    report_path: str
-    mode: str
-    generated_code: str
-    generated_tests: str
-    generated_docs: str
+    mode: Literal['project', 'learning']
+    create_repo: bool
+    github_issues: list[dict]
+    readme: str
+    notes: str
+    calendar_events: list[dict]

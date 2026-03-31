@@ -4,14 +4,14 @@ from agents import get_llm
 from code.code_tools import generate_code, generate_tests, generate_documentation
 from langchain_core.tools import tool
 
-_code_store = {"code": "", "tests": "", "docs": ""}
+_code_store = {"code": [], "tests": [], "docs": []}
 
 @tool
 def write_code(requirements: str, language: str, context: str = "") -> str:
     """Writes implementation code for the given requirements. No tests, no examples, no docs."""
     print (f"Writing code for {requirements[:20]} in {language}")
     result = generate_code(requirements, language, context)
-    _code_store["code"] = result
+    _code_store["code"].append(result)
     return result
 
 @tool
@@ -19,7 +19,7 @@ def write_tests(code: str, framework: str ="pytest", context: str = "") -> str:
     """Writes tests for the provided code using the specified framework."""
     print(f"Writing tests for {code[:20]} using {framework}")
     result = generate_tests(code, framework, context)
-    _code_store["tests"] = result
+    _code_store["tests"].append(result)
     return result
 
 @tool
@@ -27,7 +27,7 @@ def write_documentation(code: str, context: str = "") -> str:
     """Writes documentation for the provided code."""
     print(f"Writing documentation for {code[:20]}")
     result = generate_documentation(code, context)
-    _code_store["docs"] = result
+    _code_store["docs"].append(result)
     return result
 
 
@@ -80,6 +80,8 @@ def build_code_supervisor():
         3. Assign to doc_writer to write documentation
         4. When all three are done, return FINISH
         
+        IMPORTANT: Always pass the exact generated codet to test_writer and doc_writer.
+        Do not summarize or modify the code between agents. 
         Always follow this order: code → tests → documentation.""",
         output_mode="full_history"
     )
