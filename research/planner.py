@@ -20,6 +20,7 @@ Create a plan as a JSON list of tasks. Each task must have:
 - duration_minutes: estimated time needed
 
 The plan should be realistic, specific and directly related to the user's goal.
+Task should be written in the same language as the user query.
 Return ONLY valid JSON list, no other text:
 [
     {{

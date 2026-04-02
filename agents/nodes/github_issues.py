@@ -1,13 +1,28 @@
 import os
 import re
 import requests
+from langchain_core.prompts import PromptTemplate
 
 from agents import get_llm
 from agents.state import AgentState
 
 GITHUB_API = "https://api.github.com"
 
+GENERATE_REPO_NAME_PROMPT = """Generate a short GitHub repository name (slug) for this project idea: {query}
+Rules:
+Only lowercase letters, digits, and hyphens
+Max 40 characters
+No prefix like 'ai-' or 'repo-'
+English only
+Return ONLY the slug, nothing else
+"""
 
+CODE_SNIPPET_PROMPT = """
+Generate a concise starter code snippet in Python for this task:
+Title: {title}
+Description: {description}
+Provide only the code with minimal comments.
+"""
 def _get_headers(token: str) -> dict:
     return {
         "Authorization": f"Bearer {token}",
@@ -19,15 +34,12 @@ def _get_headers(token: str) -> dict:
 def _repo_name_from_query(query: str) -> str:
     """Uses LLM to generate a concise slug-style repo name from the query."""
     llm = get_llm()
-    response = llm.invoke(
-        f"Generate a short GitHub repository name (slug) for this project idea:\n\"{query}\"\n\n"
-        f"Rules:\n"
-        f"- Only lowercase letters, digits, and hyphens\n"
-        f"- Max 40 characters\n"
-        f"- No prefix like 'ai-' or 'repo-'\n"
-        f"- English only\n"
-        f"- Return ONLY the slug, nothing else"
+    prompt = PromptTemplate(
+        template=GENERATE_REPO_NAME_PROMPT,
+        input_variables=["query"]
     )
+    chain = prompt | llm
+    response = chain.invoke({"query": query})
     slug = response.content.strip().lower()
     slug = re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
     return slug[:40] or "ai-research-project"
@@ -148,12 +160,12 @@ def code_snippets_node(state: AgentState) -> AgentState:
         if not repo:
             continue
 
-        response = llm.invoke(
-            f"Generate a concise starter code snippet in Python for this task:\n"
-            f"Title: {task.get('title', '')}\n"
-            f"Description: {task.get('description', '')}\n\n"
-            f"Provide only the code with minimal comments."
+        prompt = PromptTemplate(
+            template=CODE_SNIPPET_PROMPT,
+            input_variables=["title", "description"]
         )
+        chain = prompt | llm
+        response = chain.invoke({state.get('title', ''): state.get('description', '')})
 
         comment_body = f"## Starter Code Snippet\n\n```python\n{response.content}\n```"
         resp = requests.post(

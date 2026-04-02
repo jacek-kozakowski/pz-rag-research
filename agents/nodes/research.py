@@ -35,10 +35,10 @@ def research_tools_node_handler(state: AgentState) -> AgentState:
     for tool_call in last_message.tool_calls:
         tool_name = tool_call['name']
         tool_args = tool_call['args']
-        if tool_name == 'search_local_documents':
+        if tool_name == 'search_local_documents_tool':
             result = search_local_documents_tool.invoke(tool_args)
             local_results = result
-        elif tool_name == 'search_web':
+        elif tool_name == 'search_web_tool':
             result = search_web_tool.invoke(tool_args)
             web_results = result
         else:
@@ -47,7 +47,6 @@ def research_tools_node_handler(state: AgentState) -> AgentState:
         tool_results.append(
             ToolMessage(content=str(result), tool_call_id=tool_call['id'])
         )
-
     return {
         "messages": tool_results,
         "local_result": local_results,

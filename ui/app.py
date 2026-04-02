@@ -11,6 +11,14 @@ from langchain_core.messages import HumanMessage
 
 load_dotenv()
 
+# Load Streamlit secrets into os.environ (secrets take priority over .env)
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str) and _k not in os.environ:
+            os.environ[_k] = _v
+except Exception:
+    pass
+
 st.set_page_config(
     page_title="RAG Research",
     page_icon="🔍",
