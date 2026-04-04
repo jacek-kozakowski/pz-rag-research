@@ -60,7 +60,6 @@ def calendar_node(state: AgentState) -> AgentState:
         return {"calendar_events": []}
 
     created_events = []
-    start_date = datetime.utcnow()
 
     for task in tasks:
         try:
@@ -68,6 +67,14 @@ def calendar_node(state: AgentState) -> AgentState:
         except (ValueError, TypeError) as e:
             print(f"[CALENDAR DEBUG] invalid duration_minutes={task.get('duration_minutes')!r}, using 60: {e}")
             duration_minutes = 60
+
+        deadline = task.get('deadline')
+        start_time = task.get('start_time', '09:00')
+        try:
+            start_date = datetime.strptime(f"{deadline} {start_time}", "%Y-%m-%d %H:%M")
+        except (ValueError, TypeError) as e:
+            print(f"[CALENDAR DEBUG] invalid deadline/start_time ({deadline!r}, {start_time!r}), falling back to now: {e}")
+            start_date = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
 
         end_date = start_date + timedelta(minutes=duration_minutes)
 
@@ -95,9 +102,6 @@ def calendar_node(state: AgentState) -> AgentState:
             "start": start_date.isoformat(),
             "url": result.get("htmlLink", "")
         })
-
-        # next task starts 1 hour after previous ends
-        start_date = end_date + timedelta(hours=1)
 
     print(f"[CALENDAR DEBUG] done, created {len(created_events)} events")
     return {"calendar_events": created_events}

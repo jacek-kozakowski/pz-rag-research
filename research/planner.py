@@ -16,6 +16,7 @@ Create a plan as a JSON list of tasks. Each task must have:
 - title: short task name
 - description: what exactly to do
 - deadline: specific date (YYYY-MM-DD format)
+- start_time: suggested start time for this task (HH:MM, 24h format). Pick realistic working hours (e.g. 09:00, 10:30, 14:00). Space tasks sensibly throughout the day — avoid scheduling everything back-to-back.
 - priority: high / medium / low
 - duration_minutes: estimated time needed
 
@@ -27,6 +28,7 @@ Return ONLY valid JSON list, no other text:
         "title": "...",
         "description": "...",
         "deadline": "YYYY-MM-DD",
+        "start_time": "09:00",
         "priority": "high",
         "duration_minutes": 60
     }}
