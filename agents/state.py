@@ -11,6 +11,7 @@ class AgentState(TypedDict):
     tasks: list[dict]
     mode: Literal['project', 'learning']
     create_repo: bool
+    use_calendar: bool
     github_issues: list[dict]
     readme: str
     notes: str

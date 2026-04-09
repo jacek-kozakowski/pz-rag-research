@@ -2,16 +2,17 @@ from langchain_core.messages import SystemMessage, ToolMessage
 
 from agents import get_llm
 from agents.state import AgentState
-from research.research_tools import search_local_documents_tool, search_web_tool
+from research.research_tools import search_local_documents_tool, search_web_tool, decompose_topic_tool
 
-search_tools = [search_local_documents_tool, search_web_tool]
+search_tools = [decompose_topic_tool, search_local_documents_tool, search_web_tool]
 
 SYSTEM_PROMPT_SEARCH = """You are a research assistant with access to tools.
 
 Your workflow:
-1. First call search_local_documents to find relevant information locally,
-2. If more information needed or topic requires current data, call search_web to find relevant information from the web
-3. When you have enough information, stop calling tools.
+1. First call decompose_topic to decompose the user's query into specific topics,
+2. For each subtopic, call search_local_documents to find relevant information locally,
+3. If more info needed or topic requires current data, call search_web to find relevant information from the web
+4. When you have enough information, stop calling tools.
 
 Be thorough - collect as much relevant information as possible."""
 
@@ -41,6 +42,8 @@ def research_tools_node_handler(state: AgentState) -> AgentState:
         elif tool_name == 'search_web_tool':
             result = search_web_tool.invoke(tool_args)
             web_results = result
+        elif tool_name == 'decompose_topic_tool':
+            result = decompose_topic_tool.invoke(tool_args)
         else:
             result = f"Unknown tool. Tool '{tool_name}' not found."
 

@@ -8,9 +8,10 @@ You are a research query planner. Given a user goal, extract the core topic and 
 These queries should be optimized for rag search in local vector database.
 
 User goal: {query}
+Specific topic to focus on: {topic}
 
 Instructions:
-- Extract ONLY the technical/educational topic from the user's message, ignore deadlines and personal context
+- Generate queries specifically for the topic above, using the user goal as context
 - rag_query: list of maximum 5 (less if there is no need for 5) specific technical terms for searching local documents
 - Queries should be in the same language as the user query, but if the language is not supported, generate queries in English
 
@@ -45,17 +46,25 @@ Rules:
 Return ONLY a JSON list of 3 strings:
 ["query1", "query2", "query3"]"""
 
-def plan_rag_queries(query: str) -> list[str]:
+def plan_rag_queries(query: str, topic: str = "") -> list[str]:
     llm = get_llm(task="query_planner")
     prompt = PromptTemplate(
         template=PROMPT_TEMPLATE_RAG,
-        input_variables=["query", "language"],
+        input_variables=["query", "topic"],
     )
     chain = prompt | llm | JsonOutputParser()
 
-    result = chain.invoke({"query": query})
+    result = chain.invoke({"query": query, "topic": topic or query})
     print("Planned RAG queries:", result['rag_query'])
     return result['rag_query']
+
+
+def plan_rag_queries_from_topics(query: str, topics: list[str]) -> list[str]:
+    all_queries = []
+    for topic in topics:
+        all_queries.extend(plan_rag_queries(query, topic))
+    print("Planned RAG queries from topics:", all_queries)
+    return all_queries
 
 def plan_web_query(query: str) -> str:
     llm = get_llm(task="query_planner")

@@ -45,10 +45,16 @@ query = st.text_area(
 )
 
 create_repo = False
+use_calendar = False
 if mode == "project":
     create_repo = st.checkbox(
         "Create new GitHub repo for this project",
         help="Requires GITHUB_TOKEN. If GITHUB_REPO is already set in .env, that repo will be used instead."
+    )
+if mode == "learning":
+    use_calendar = st.checkbox(
+        "Add events to Google Calendar",
+        help="Requires GOOGLE_CREDENTIALS_PATH and GOOGLE_CALENDAR_ID to be set."
     )
 
 col1, col2, col3 = st.columns([1, 1, 6])
@@ -67,6 +73,7 @@ if run and query:
                 "query": query,
                 "mode": mode,
                 "create_repo": create_repo,
+                "use_calendar": use_calendar,
                 "messages": [HumanMessage(content=query)]
             })
             st.session_state["result"] = result

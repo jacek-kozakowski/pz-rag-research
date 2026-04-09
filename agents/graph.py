@@ -36,8 +36,12 @@ def build_project_graph():
     return graph.compile()
 
 
+def should_use_calendar(state: AgentState) -> str:
+    return "calendar" if state.get('use_calendar', False) else "notes"
+
+
 def build_learning_graph():
-    """research_agent → summarization → task_planner → calendar → notes → END"""
+    """research_agent → summarization → task_planner → (calendar →)? notes → END"""
     graph = StateGraph(AgentState)
 
     graph.add_node('research_agent', research_agent_node)
@@ -54,7 +58,10 @@ def build_learning_graph():
     })
     graph.add_edge('research_tools', 'research_agent')
     graph.add_edge('summarization', 'task_planner')
-    graph.add_edge('task_planner', 'calendar')
+    graph.add_conditional_edges('task_planner', should_use_calendar, {
+        "calendar": 'calendar',
+        "notes": 'notes'
+    })
     graph.add_edge('calendar', 'notes')
     graph.add_edge('notes', END)
 
