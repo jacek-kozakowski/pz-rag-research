@@ -1,7 +1,7 @@
 from langchain_core.prompts import PromptTemplate
 from agents import get_llm
 
-PROMPT_TEMPLATE = """You are a research analyst. Create a comprehensive, detailed report based on the sources below.
+PROMPT_TEMPLATE = """You are a research analyst. Create a concise summary based on the sources below.
 IMPORTANT: Respond in the same language as the user's question.
 
 User's goal: {query}
@@ -12,14 +12,13 @@ Local documents findings:
 Web research findings:
 {web_answer}
 
-Write a DETAILED report that:
-- Is at least 500 words long
-- Has clear sections with headers (##)
-- Includes specific facts, examples, code snippets if relevant
-- Provides actionable information directly related to the user's goal
-- Cites specific findings from both sources
+Write a concise summary that:
+- Is 150-250 words long
+- Lists the key concepts and topics found
+- Highlights the most important facts
+- Does NOT go into deep explanations — that will be done separately
 
-Report:"""
+Summary:"""
 def summarize(query: str, local_result: dict, web_result: dict) -> dict:
 
     local_answer = local_result.get('answer', "No information found in local documents")

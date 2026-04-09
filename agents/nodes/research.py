@@ -11,7 +11,7 @@ SYSTEM_PROMPT_SEARCH = """You are a research assistant with access to tools.
 Your workflow:
 1. First call decompose_topic to decompose the user's query into specific topics,
 2. For each subtopic, call search_local_documents to find relevant information locally,
-3. If more info needed or topic requires current data, call search_web to find relevant information from the web
+3. Call search_web to find relevant information from the web, use it at least once, more if needed,
 4. When you have enough information, stop calling tools.
 
 Be thorough - collect as much relevant information as possible."""
