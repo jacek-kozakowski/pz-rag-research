@@ -61,3 +61,17 @@ def delete_file(filename: str):
     ensure_bucket()
     client = get_minio_client()
     client.delete_object(Bucket=MINIO_BUCKET_NAME, Key=filename)
+
+
+def load_full_documents(source_files: list[str]) -> list[str]:
+    from rag.loader import load_file
+    texts = []
+    for filename in source_files:
+        tmp_file = download_to_temp(filename)
+        try:
+            docs = load_file(tmp_file)
+            full_text = "\n\n".join(doc.page_content for doc in docs)
+            texts.append(f"=== {filename} ===\n\n{full_text}")
+        finally:
+            os.unlink(tmp_file)
+    return texts

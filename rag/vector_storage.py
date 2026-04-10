@@ -103,6 +103,14 @@ def search(query: str, k: int = 3, collection_type: str = "research"):
     db = load_db(collection_type)
     return db.similarity_search(query, k=k)
 
+def find_relevant_sources(query: str, k : int = 20, collection_type: str = "research") -> dict[str, int]:
+    results = search(query, k=k, collection_type=collection_type)
+    counts = {}
+    for doc in results:
+        source = doc.metadata.get("source", "")
+        if source:
+            counts[source] = counts.get(source, 0) + 1
+    return counts
 
 def delete_from_db(source_file: str, collection_type: str = "research"):
     db = load_db(collection_type)
