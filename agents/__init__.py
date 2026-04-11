@@ -33,6 +33,12 @@ def get_llm(temperature: float = 0.0, task:str = "default"):
             print("Using Ollama API for query planner")
             return ChatOllama(model="mistral", temperature=temperature)
 
+    if task == "notes":
+        if os.getenv("OPENAI_API_KEY"):
+            return ChatOpenAI(model="gpt-4o", temperature=0.3)
+        elif os.getenv("GROQ_API_KEY"):
+            return ChatGroq(model="llama-3.3-70b-versatile", temperature=0.3)
+
     if task == "code":
         if os.getenv("OPENAI_API_KEY"):
             return ChatOpenAI(model="gpt-4o", temperature=0.2)

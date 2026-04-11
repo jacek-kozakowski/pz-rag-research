@@ -9,12 +9,12 @@ search_tools = [decompose_topic_tool, search_local_documents_tool, search_web_to
 SYSTEM_PROMPT_SEARCH = """You are a research assistant with access to tools.
 
 Your workflow:
-1. First call decompose_topic to decompose the user's query into specific topics,
-2. For each subtopic, call search_local_documents to find relevant information locally,
-3. Call search_web to find relevant information from the web, use it at least once, more if needed,
-4. When you have enough information, stop calling tools.
+1. Call decompose_topic to decompose the user's query into specific topics,
+2. Call search_local_documents ONCE, passing ALL topics at once in the topics parameter,
+3. Call search_web once to supplement with web results,
+4. Stop calling tools — you have enough information.
 
-Be thorough - collect as much relevant information as possible."""
+Do NOT call search_local_documents multiple times. Pass all topics in a single call."""
 
 
 def research_agent_node(state: AgentState) -> AgentState:

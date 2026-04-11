@@ -56,3 +56,29 @@ def decompose_topic_tool(query: str) -> list[str]:
     from research.topic_decomposition import decompose_topic
     return decompose_topic(query)
 
+
+@tool
+def find_relevant_sources_tool(query: str) -> dict[str, int]:
+    """
+    Finds which local documents are most relevant to the query.
+    Returns {filename: hit_count} — higher count means more relevant.
+    Use this when the user asks about a specific course or subject,
+    to identify which files belong to that course before loading them.
+    """
+    from rag.vector_storage import find_relevant_sources
+    sources = find_relevant_sources(query, k=50)
+    print(sources.keys())
+    return sources
+
+
+@tool
+def load_full_documents_tool(source_files: list[str]) -> str:
+    """
+    Loads the complete text content of the specified files.
+    Use this after find_relevant_sources_tool to get full document content
+    instead of RAG chunks — gives more complete notes.
+    Returns full text of each file with filename headers.
+    """
+    from rag.minio_storage import load_full_documents
+    texts =  load_full_documents(source_files)
+    return "\n\n".join(texts)

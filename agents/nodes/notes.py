@@ -6,8 +6,52 @@ from research.research_tools import search_local_documents_tool, search_web_tool
 
 notes_tools = [search_local_documents_tool, search_web_tool]
 
-NOTES_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes.
-This notes will be used by a student to learn the given topic and should be a good foundation for further study.
+EXTRACT_SYSTEM_PROMPT = """You are a precise content extractor. Your job is to extract ALL substantive academic content from a course document.
+
+Extract thoroughly:
+- Every key concept, definition, and theorem with exact wording
+- All algorithms with their full steps, pseudocode, and time/space complexity
+- All formulas and mathematical relationships
+- All examples, including numerical ones
+- Comparisons between methods (pros, cons, when to use)
+- Edge cases, limitations, and special cases mentioned
+
+SKIP completely:
+- Lecturer name, email, office hours
+- Course schedule, meeting times, deadlines
+- Administrative announcements
+- Any organizational/logistical information
+
+Be specific and detailed — preserve exact names, numbers, complexity classes, and technical details.
+Do NOT add outside knowledge. Only extract what is in the document.
+"""
+
+NOTES_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes from course materials.
+These notes will be used by a student to prepare for an exam and must be thorough enough to study from alone.
+
+The provided extracts are the course material — treat them as the single source of truth.
+
+Notes structure:
+1. **Key Concepts** — precise definitions exactly as defined in the material, with formal notation where present
+2. **Detailed Explanations** — for EACH major topic: full explanation of how and why it works, all steps/mechanisms, specific values, formulas, or rules mentioned in the material
+3. **Comparisons** — compare related concepts, methods or approaches against each other where relevant
+4. **Common Mistakes & Pitfalls** — typical errors and misconceptions from the material
+5. **Practical Examples** — concrete examples from the documents (numerical, real-world, case studies)
+6. **Flashcards** — at least 10 Q&A pairs covering definitions, key facts, and distinctions
+7. **Review Questions** — at least 5 open-ended questions that test deep understanding
+
+Rules:
+- Every section must be grounded in the provided extracts — no generic filler
+- Cover ALL topics from the material, not just the most obvious ones
+- Be specific: exact names, numbers, formulas, classifications as they appear in the material
+- Do NOT abbreviate, summarize or skip any topic — write out everything in full
+- If a topic has subtopics, cover each subtopic separately and in depth
+- Notes must be in the same language as the user query
+- Use clear Markdown formatting
+"""
+
+NOTES_RESEARCH_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes.
+These notes will be used by a student to learn the given topic and should be a good foundation for further study.
 You have access to search tools — use them to expand on concepts that need deeper explanation beyond what the summary provides.
 
 Your workflow:
@@ -32,9 +76,50 @@ Rules:
 - Use clear Markdown formatting
 """
 
-def notes_node(state: AgentState) -> AgentState:
-    print("Notes node executing...")
-    llm = get_llm().bind_tools(notes_tools)
+
+def _notes_from_local_files(state: AgentState) -> AgentState:
+    from rag.vector_storage import find_relevant_sources
+    from rag.minio_storage import load_full_documents
+
+    llm = get_llm()
+
+    # Find relevant files
+    selected = find_relevant_sources(state['query'])
+    print(f"Selected files for full load: {selected}")
+    if not selected:
+        print("No relevant sources found, aborting notes generation")
+        return {"notes": "No relevant documents found for this topic."}
+
+    # MAP — extract then write notes for each file in parallel
+    texts = load_full_documents(selected)
+    query = state['query']
+
+    def process_file(args):
+        text, filename = args
+        print(f"Extracting content from {filename}...")
+        extract = get_llm().invoke([
+            SystemMessage(content=EXTRACT_SYSTEM_PROMPT),
+            HumanMessage(content=f"Topic: {query}\n\nDocument:\n{text}")
+        ]).content
+
+        print(f"Writing notes for {filename}...")
+        notes = get_llm(task="notes").invoke([
+            SystemMessage(content=NOTES_SYSTEM_PROMPT),
+            HumanMessage(content=f"Topic: {query}\n\nExtracted content:\n\n{extract}")
+        ]).content
+
+        return filename, notes
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(process_file, zip(texts, selected)))
+
+    all_notes = [f"## {filename}\n\n{notes}" for filename, notes in results]
+    return {"notes": "\n\n---\n\n".join(all_notes)}
+
+
+def _notes_from_research(state: AgentState) -> AgentState:
+    llm = get_llm().bind_tools([search_local_documents_tool, search_web_tool])
 
     local_result = state.get('local_result', {})
     web_result = state.get('web_result', {})
@@ -45,7 +130,7 @@ def notes_node(state: AgentState) -> AgentState:
     context += f"Web research findings:\n{web_result.get('answer', 'No web data')}"
 
     messages = [
-        SystemMessage(content=NOTES_SYSTEM_PROMPT),
+        SystemMessage(content=NOTES_RESEARCH_SYSTEM_PROMPT),
         HumanMessage(content=context)
     ]
 
@@ -64,7 +149,17 @@ def notes_node(state: AgentState) -> AgentState:
                 result = search_web_tool.invoke(tool_call['args'])
             else:
                 result = f"Unknown tool: {tool_name}"
-
             messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
 
     return {"notes": response.content}
+
+
+def notes_node(state: AgentState) -> AgentState:
+    print("Notes node executing...")
+    intent = state.get('intent', 'research')
+    if intent == 'local_files':
+        print("Using local files map-reduce approach")
+        return _notes_from_local_files(state)
+    else:
+        print("Using research approach")
+        return _notes_from_research(state)

@@ -7,6 +7,7 @@ from agents.nodes.github_issues import github_issues_node, code_snippets_node
 from agents.nodes.readme import readme_node
 from agents.nodes.calendar import calendar_node
 from agents.nodes.notes import notes_node
+from agents.nodes.detect_intent import detect_intent_node, route_by_intent
 
 
 def build_project_graph():
@@ -36,14 +37,21 @@ def build_project_graph():
     return graph.compile()
 
 
-def should_use_calendar(state: AgentState) -> str:
-    return "calendar" if state.get('use_calendar', False) else "notes"
+def after_task_planner(state: AgentState) -> str:
+    if state.get('use_calendar', False):
+        return "calendar"
+    return "notes" if state.get('intent') == 'research' else END
+
+
+def after_calendar(state: AgentState) -> str:
+    return "notes" if state.get('intent') == 'research' else END
 
 
 def build_learning_graph():
-    """research_agent → summarization → task_planner → (calendar →)? notes → END"""
+    """detect_intent → local_files: notes | research: research_agent → summarization → task_planner → (calendar →)? notes → END"""
     graph = StateGraph(AgentState)
 
+    graph.add_node('detect_intent', detect_intent_node)
     graph.add_node('research_agent', research_agent_node)
     graph.add_node('research_tools', research_tools_node_handler)
     graph.add_node('summarization', summarization_node)
@@ -51,18 +59,30 @@ def build_learning_graph():
     graph.add_node('calendar', calendar_node)
     graph.add_node('notes', notes_node)
 
-    graph.set_entry_point('research_agent')
+    graph.set_entry_point('detect_intent')
+    graph.add_conditional_edges('detect_intent', route_by_intent, {
+        "local_files": 'notes',
+        "research": 'research_agent'
+    })
+    # research path
     graph.add_conditional_edges('research_agent', should_continue_research, {
         "tools": 'research_tools',
         "summarization": 'summarization'
     })
     graph.add_edge('research_tools', 'research_agent')
     graph.add_edge('summarization', 'task_planner')
-    graph.add_conditional_edges('task_planner', should_use_calendar, {
+    graph.add_conditional_edges('task_planner', after_task_planner, {
         "calendar": 'calendar',
-        "notes": 'notes'
+        "notes": 'notes',
+        END: END
     })
-    graph.add_edge('calendar', 'notes')
-    graph.add_edge('notes', END)
+    graph.add_conditional_edges('calendar', after_calendar, {
+        "notes": 'notes',
+        END: END
+    })
+    graph.add_conditional_edges('notes', route_by_intent, {
+        "local_files": 'task_planner',
+        "research": END
+    })
 
     return graph.compile()

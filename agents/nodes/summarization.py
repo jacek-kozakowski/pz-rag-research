@@ -15,5 +15,6 @@ def summarization_node(state: AgentState) -> AgentState:
 
 def task_planner_node(state: AgentState) -> AgentState:
     print("Task planner node executing...")
-    tasks = plan_task(state['summary'], state['query'])
+    content = state.get('summary') or state.get('notes', '')
+    tasks = plan_task(content, state['query'])
     return {"tasks": tasks}

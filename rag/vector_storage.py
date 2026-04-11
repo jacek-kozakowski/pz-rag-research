@@ -103,14 +103,40 @@ def search(query: str, k: int = 3, collection_type: str = "research"):
     db = load_db(collection_type)
     return db.similarity_search(query, k=k)
 
-def find_relevant_sources(query: str, k : int = 20, collection_type: str = "research") -> dict[str, int]:
+def find_relevant_sources(query: str, k: int = 30, collection_type: str = "research") -> list[str]:
+    # Round 1 — broad search, pick dominant files (>=10 hits)
     results = search(query, k=k, collection_type=collection_type)
     counts = {}
     for doc in results:
         source = doc.metadata.get("source", "")
         if source:
             counts[source] = counts.get(source, 0) + 1
-    return counts
+
+    dominant = [s for s, c in counts.items() if c >= 10]
+    rest = [s for s, c in counts.items() if 2 <= c < 10]
+
+    # Round 2 — exclude dominant files, give smaller files a fair chance
+    if dominant:
+        db = load_db(collection_type)
+        round2_results = db.similarity_search(
+            query, k=k,
+            filter={"source": {"$nin": dominant}}
+        )
+        round2_counts = {}
+        for doc in round2_results:
+            source = doc.metadata.get("source", "")
+            if source:
+                round2_counts[source] = round2_counts.get(source, 0) + 1
+        round2_selected = [s for s, c in round2_counts.items() if c >= 3]
+    else:
+        round2_selected = []
+
+    selected = dominant + [s for s in rest if s not in dominant]
+    for s in round2_selected:
+        if s not in selected:
+            selected.append(s)
+
+    return selected
 
 def delete_from_db(source_file: str, collection_type: str = "research"):
     db = load_db(collection_type)

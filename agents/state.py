@@ -16,3 +16,4 @@ class AgentState(TypedDict):
     readme: str
     notes: str
     calendar_events: list[dict]
+    intent: Literal['local_files', 'research']

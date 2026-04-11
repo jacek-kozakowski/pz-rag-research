@@ -12,7 +12,7 @@ Specific topic to focus on: {topic}
 
 Instructions:
 - Generate queries specifically for the topic above, using the user goal as context
-- rag_query: list of maximum 5 (less if there is no need for 5) specific technical terms for searching local documents
+- rag_query: list of maximum 2 specific technical terms for searching local documents
 - Queries should be in the same language as the user query, but if the language is not supported, generate queries in English
 
 Respond ONLY with valid JSON, no other text:
