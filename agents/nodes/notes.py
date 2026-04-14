@@ -1,8 +1,25 @@
+import re
+
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 from agents import get_llm
 from agents.state import AgentState
 from research.research_tools import search_local_documents_tool, search_web_tool
+
+
+def _fix_latex(text: str) -> str:
+    """Normalize LaTeX delimiters to $...$ and $$...$$ for Streamlit KaTeX."""
+    # \(...\) -> $...$
+    text = re.sub(r'\\\((.+?)\\\)', r'$\1$', text, flags=re.DOTALL)
+    # \[...\] -> $$...$$
+    text = re.sub(r'\\\[(.+?)\\\]', r'$$\1$$', text, flags=re.DOTALL)
+    # Bare \begin{env}...\end{env} not already inside $$ → $$...$$
+    text = re.sub(
+        r'(?<!\$)\\begin\{([^}]+)\}(.*?)\\end\{\1\}(?!\$)',
+        lambda m: f'$$\\begin{{{m.group(1)}}}{m.group(2)}\\end{{{m.group(1)}}}$$',
+        text, flags=re.DOTALL
+    )
+    return text
 
 notes_tools = [search_local_documents_tool, search_web_tool]
 
@@ -22,6 +39,18 @@ SKIP completely:
 - Administrative announcements
 - Any organizational/logistical information
 
+PDF MATH REPAIR — PDF extraction often mangles mathematical notation. Fix it during extraction:
+- Duplicated variable+subscript like "x\na\nx\na" or "x a x a" → $x_a$
+- Duplicated variable+superscript like "n\n2\nn\n2" or "n 2 n 2" → $n^2$
+- Standalone letters repeated before a word like "k\nk-elementowy" → "$k$-elementowy"
+- Inline complexity like "O(b d+1 )" or "O(b\nd+1\n)" → $O(b^{d+1})$
+- Any formula written out twice in slightly different forms — keep once, use LaTeX $...$
+
+MATH OUTPUT FORMAT:
+- Use $...$ for all inline math (variables, formulas, complexity)
+- Use $$...$$ for standalone display formulas
+- Never use \(...\) or \[...\]
+
 Be specific and detailed — preserve exact names, numbers, complexity classes, and technical details.
 Do NOT add outside knowledge. Only extract what is in the document.
 """
@@ -31,7 +60,7 @@ These notes will be used by a student to prepare for an exam and must be thoroug
 
 The provided extracts are the course material — treat them as the single source of truth.
 
-Notes structure:
+Notes structure (translate ALL section headings to match the language of the notes):
 1. **Key Concepts** — precise definitions exactly as defined in the material, with formal notation where present
 2. **Detailed Explanations** — for EACH major topic: full explanation of how and why it works, all steps/mechanisms, specific values, formulas, or rules mentioned in the material
 3. **Comparisons** — compare related concepts, methods or approaches against each other where relevant
@@ -46,8 +75,17 @@ Rules:
 - Be specific: exact names, numbers, formulas, classifications as they appear in the material
 - Do NOT abbreviate, summarize or skip any topic — write out everything in full
 - If a topic has subtopics, cover each subtopic separately and in depth
-- Notes must be in the same language as the user query
+- Notes must be in the same language as the user query — this includes ALL section headings, not just the body text
 - Use clear Markdown formatting
+- Do NOT add a title heading (# ...) at the top — the section header with the source filename is already provided externally
+- MATH FORMATTING — the renderer supports ONLY $...$ (inline) and $$...$$ (display block):
+  - WRONG: \(O(n \log n)\)  →  RIGHT: $O(n \log n)$
+  - WRONG: \[f(x) = x^2\]   →  RIGHT: $$f(x) = x^2$$
+  - WRONG: ( O(n \log n) )  →  RIGHT: $O(n \log n)$
+  - WRONG: [ \begin{cases}...\end{cases} ]  →  RIGHT: $$\begin{cases}...\end{cases}$$
+  - WRONG: 𝑛, 𝒪, 𝑥 (Unicode math)  →  RIGHT: $n$, $\mathcal{O}$, $x$
+  - WRONG: O(n log n) plain text  →  RIGHT: $O(n \log n)$
+  - Every variable, formula, complexity, subscript, superscript MUST be inside $...$
 """
 
 NOTES_RESEARCH_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes.
@@ -61,7 +99,7 @@ Your workflow:
 4. Use search_local_documents_tool to find any additional relevant material from local documents
 5. Generate the final notes using all collected information
 
-Notes structure:
+Notes structure (translate ALL section headings to match the language of the notes):
 1. Key Concepts - comprehensive definitions and explanations of the main concepts
 2. Detailed Explanations - deep dive with examples, mechanisms (not just what, but why and how)
 3. Common Mistakes & Pitfalls - typical errors and misconceptions
@@ -72,8 +110,16 @@ Notes structure:
 Rules:
 - Do not include code snippets unless the user explicitly asked for them
 - Focus on depth of understanding, not surface-level definitions
-- Notes must be in the same language as the user query
+- Notes must be in the same language as the user query — this includes ALL section headings, not just the body text
 - Use clear Markdown formatting
+- MATH FORMATTING — the renderer supports ONLY $...$ (inline) and $$...$$ (display block):
+  - WRONG: \(O(n \log n)\)  →  RIGHT: $O(n \log n)$
+  - WRONG: \[f(x) = x^2\]   →  RIGHT: $$f(x) = x^2$$
+  - WRONG: ( O(n \log n) )  →  RIGHT: $O(n \log n)$
+  - WRONG: [ \begin{cases}...\end{cases} ]  →  RIGHT: $$\begin{cases}...\end{cases}$$
+  - WRONG: 𝑛, 𝒪, 𝑥 (Unicode math)  →  RIGHT: $n$, $\mathcal{O}$, $x$
+  - WRONG: O(n log n) plain text  →  RIGHT: $O(n \log n)$
+  - Every variable, formula, complexity, subscript, superscript MUST be inside $...$
 """
 
 
@@ -105,10 +151,10 @@ def _notes_from_local_files(state: AgentState) -> AgentState:
         print(f"Writing notes for {filename}...")
         notes = get_llm(task="notes").invoke([
             SystemMessage(content=NOTES_SYSTEM_PROMPT),
-            HumanMessage(content=f"Topic: {query}\n\nExtracted content:\n\n{extract}")
+            HumanMessage(content=f"Topic: {query}\nSource file: {filename}\n\nExtracted content:\n\n{extract}")
         ]).content
 
-        return filename, notes
+        return filename, _fix_latex(notes)
 
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor() as executor:
@@ -151,7 +197,7 @@ def _notes_from_research(state: AgentState) -> AgentState:
                 result = f"Unknown tool: {tool_name}"
             messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
 
-    return {"notes": response.content}
+    return {"notes": _fix_latex(response.content)}
 
 
 def notes_node(state: AgentState) -> AgentState:
