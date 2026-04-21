@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, END
 from agents.state import AgentState
 from agents.nodes.research import research_agent_node, research_tools_node_handler, should_continue_research
 from agents.nodes.summarization import summarization_node, task_planner_node
-from agents.nodes.github_issues import github_issues_node, code_snippets_node
+from agents.nodes.github_issues import github_issues_node
 from agents.nodes.scaffolding import scaffolding_node
 from agents.nodes.readme import readme_node
 from agents.nodes.calendar import calendar_node
@@ -12,7 +12,7 @@ from agents.nodes.detect_intent import detect_intent_node, route_by_intent
 
 
 def build_project_graph():
-    """research_agent → summarization → task_planner → scaffolding → github_issues → code_snippets → readme → END"""
+    """research_agent → summarization → task_planner → scaffolding → github_issues → readme → END"""
     graph = StateGraph(AgentState)
 
     graph.add_node('research_agent', research_agent_node)
@@ -21,7 +21,6 @@ def build_project_graph():
     graph.add_node('task_planner', task_planner_node)
     graph.add_node('scaffolding', scaffolding_node)
     graph.add_node('github_issues', github_issues_node)
-    graph.add_node('code_snippets', code_snippets_node)
     graph.add_node('readme', readme_node)
 
     graph.set_entry_point('research_agent')
@@ -33,8 +32,7 @@ def build_project_graph():
     graph.add_edge('summarization', 'task_planner')
     graph.add_edge('task_planner', 'scaffolding')
     graph.add_edge('scaffolding', 'github_issues')
-    graph.add_edge('github_issues', 'code_snippets')
-    graph.add_edge('code_snippets', 'readme')
+    graph.add_edge('github_issues', 'readme')
     graph.add_edge('readme', END)
 
     return graph.compile()

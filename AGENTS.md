@@ -13,7 +13,7 @@ Multi-agent RAG system built with LangGraph. Takes a user query, researches it (
 ```
 Project:
   research_agent → (tools loop) → summarization → task_planner
-    → scaffolding → github_issues → code_snippets → readme → END
+    → scaffolding → github_issues → readme → END
 
 Learning:
   detect_intent → local_files: notes → task_planner → END
@@ -29,9 +29,8 @@ Learning:
 | `research_tools` | `agents/nodes/research.py` | Executes tool calls emitted by `research_agent`                                                      |
 | `summarization` | `agents/nodes/summarization.py` | Consolidates raw research messages into a coherent summary                                           |
 | `task_planner` | `agents/nodes/summarization.py` | Extracts a list of actionable tasks `{title, description, priority, duration_minutes}` from the summary |
-| `scaffolding` | `agents/nodes/github_issues.py` | Generates a Python module skeleton per task (`filepath` + `code`); stored in `state.scaffold`        |
-| `github_issues` | `agents/nodes/github_issues.py` | Creates a GitHub repo (optionally) and opens one issue per task; issue body references the scaffold file |
-| `code_snippets` | `agents/nodes/github_issues.py` | Posts the scaffold code (or a fresh snippet if no scaffold) as a comment on each issue               |
+| `scaffolding` | `agents/nodes/scaffolding.py` | Generates a project-level file structure (`filepath`, `purpose`, `code`); stored in `state.scaffold` |
+| `github_issues` | `agents/nodes/github_issues.py` | Creates a GitHub repo (optionally) and opens one issue per task |
 | `readme` | `agents/nodes/readme.py` | Generates a project README from the summary and task list                                            |
 | `calendar` | `agents/nodes/calendar.py` | Exports tasks to Google Calendar                                                                     |
 | `notes` | `agents/nodes/notes.py` | Generates structured learning notes (learning mode)                                                  |
@@ -52,7 +51,7 @@ mode: 'project'|'learning'
 create_repo: bool       # whether to auto-create a GitHub repo
 use_calendar: bool      # whether to export to Google Calendar
 github_issues: list[dict]
-scaffold: list[dict]    # [{task_title, filepath, code}]
+scaffold: list[dict]    # [{filepath, purpose, code}]
 readme: str
 notes: str
 calendar_events: list[dict]

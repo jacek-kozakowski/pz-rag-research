@@ -15,22 +15,24 @@ Return ONLY the language name, nothing else.
 
 SCAFFOLDING_PROMPT = """You are a software architect generating a {language} project scaffold.
 
-Project summary:
+Project description:
 {summary}
 
-Tasks (JSON):
-{tasks}
+Design a realistic, idiomatic {language} project file structure for this project.
+Think about the project as a whole — what modules, packages, and files a real developer would create.
 
-For each task generate one source file that provides a skeleton implementation in {language}.
 Rules:
-- Filepath must be a valid relative path with the correct extension for {language}
-- Code must be syntactically valid {language} with class/function stubs and docstrings/comments
-- task_title must exactly match the title from the tasks list
+- Group related functionality into the same file (e.g. auth routes in one file, not login.py + register.py separately)
+- Never create files whose sole purpose is to describe a task or list installation steps
+- Use conventional project layout for {language} (e.g. src/, app/, tests/, etc.)
+- Each file must contain real, syntactically valid {language} code with function/class stubs
+- Aim for 5–15 files that cover the full project structure
+- filepath must be a valid relative path with the correct extension for {language}
 
 Return a JSON array. Each element must have exactly these keys:
-  "task_title"  – exact title from tasks
-  "filepath"    – relative path of the file
-  "code"        – {language} source code
+  "filepath"  – relative path of the file
+  "purpose"   – one sentence describing what this file does
+  "code"      – {language} source code with stubs
 
 Return ONLY valid JSON. No markdown, no explanations.
 """
@@ -45,10 +47,9 @@ def _detect_language(query: str) -> str:
 
 def scaffolding_node(state: AgentState) -> AgentState:
     print("Scaffolding node executing...")
-    tasks = state.get('tasks', [])
     summary = state.get('summary', '')
 
-    if not tasks:
+    if not summary:
         return {"scaffold": [], "language": "Python"}
 
     language = state.get('language') or _detect_language(state.get('query', ''))
@@ -57,13 +58,12 @@ def scaffolding_node(state: AgentState) -> AgentState:
     llm = get_llm()
     prompt = PromptTemplate(
         template=SCAFFOLDING_PROMPT,
-        input_variables=["language", "summary", "tasks"]
+        input_variables=["language", "summary"]
     )
     chain = prompt | llm
     response = chain.invoke({
         "language": language,
         "summary": summary,
-        "tasks": json.dumps(tasks, ensure_ascii=False)
     })
 
     raw = response.content.strip()
@@ -79,6 +79,6 @@ def scaffolding_node(state: AgentState) -> AgentState:
         scaffold = []
 
     for entry in scaffold:
-        print(f"[Scaffold] {entry.get('filepath')} ← {entry.get('task_title')}")
+        print(f"[Scaffold] {entry.get('filepath')} — {entry.get('purpose', '')}")
 
     return {"scaffold": scaffold, "language": language}

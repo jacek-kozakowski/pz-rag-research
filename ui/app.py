@@ -99,7 +99,7 @@ if "result" in st.session_state:
             st.markdown(f'<span class="source-tag">{src_tag}</span>', unsafe_allow_html=True)
 
     plan = result.get("tasks", [])
-    if plan:
+    if plan and not result.get("github_issues"):
         st.markdown("#### Plan")
         priority_colors = {"high": "#ff6b6b", "medium": "#ffd93d", "low": "#6bcb77"}
         for i, task in enumerate(plan):

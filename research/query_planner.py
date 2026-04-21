@@ -17,7 +17,7 @@ Instructions:
 
 Respond ONLY with valid JSON, no other text:
 {{
-    "rag_query": ["...", "...", "..."],
+    "rag_query": ["...", "...", "..."]
 }}"""
 
 PROMPT_TEMPLATE_WEB = """

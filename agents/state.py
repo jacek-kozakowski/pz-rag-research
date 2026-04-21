@@ -17,5 +17,5 @@ class AgentState(TypedDict):
     notes: str
     calendar_events: list[dict]
     intent: Literal['local_files', 'research']
-    scaffold: list[dict]  # [{task_title, filepath, code}]
+    scaffold: list[dict]  # [{filepath, purpose, code}]
     language: str         # inferred from query, e.g. "Python", "TypeScript"
