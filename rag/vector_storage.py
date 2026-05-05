@@ -103,9 +103,19 @@ def search(query: str, k: int = 3, collection_type: str = "research"):
     db = load_db(collection_type)
     return db.similarity_search(query, k=k)
 
+# Max cosine distance to consider a chunk relevant (0=identical, 1=orthogonal, 2=opposite).
+# Chunks with distance above this threshold are discarded as unrelated noise.
+RELEVANCE_THRESHOLD = 0.6
+
 def find_relevant_sources(query: str, k: int = 30, collection_type: str = "research") -> list[str]:
+    db = load_db(collection_type)
+
     # Round 1 — broad search, pick dominant files (>=10 hits)
-    results = search(query, k=k, collection_type=collection_type)
+    raw = db.similarity_search_with_score(query, k=k)
+    results = [doc for doc, score in raw if score <= RELEVANCE_THRESHOLD]
+    if not results:
+        return []
+
     counts = {}
     for doc in results:
         source = doc.metadata.get("source", "")
@@ -117,11 +127,11 @@ def find_relevant_sources(query: str, k: int = 30, collection_type: str = "resea
 
     # Round 2 — exclude dominant files, give smaller files a fair chance
     if dominant:
-        db = load_db(collection_type)
-        round2_results = db.similarity_search(
+        raw2 = db.similarity_search_with_score(
             query, k=k,
             filter={"source": {"$nin": dominant}}
         )
+        round2_results = [doc for doc, score in raw2 if score <= RELEVANCE_THRESHOLD]
         round2_counts = {}
         for doc in round2_results:
             source = doc.metadata.get("source", "")

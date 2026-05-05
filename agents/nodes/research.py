@@ -4,8 +4,6 @@ from agents import get_llm
 from agents.state import AgentState
 from research.research_tools import search_local_documents_tool, search_web_tool, decompose_topic_tool
 
-search_tools = [decompose_topic_tool, search_local_documents_tool, search_web_tool]
-
 SYSTEM_PROMPT_SEARCH = """You are a research assistant with access to tools.
 
 Your workflow:
@@ -16,12 +14,27 @@ Your workflow:
 
 Do NOT call search_local_documents multiple times. Pass all topics in a single call."""
 
+SYSTEM_PROMPT_SEARCH_NO_WEB = """You are a research assistant with access to tools.
+
+Your workflow:
+1. Call decompose_topic to decompose the user's query into specific topics,
+2. Call search_local_documents ONCE, passing ALL topics at once in the topics parameter,
+3. Stop calling tools — you have enough information.
+
+Do NOT call search_local_documents multiple times. Pass all topics in a single call."""
+
 
 def research_agent_node(state: AgentState) -> AgentState:
     print("Research agent node executing...")
-    system_message = SystemMessage(content=SYSTEM_PROMPT_SEARCH)
-    llm = get_llm().bind_tools(tools=search_tools)
-    messages = [system_message] + state['messages']
+    web_enabled = state.get('web_enabled', True)
+    if web_enabled:
+        tools = [decompose_topic_tool, search_local_documents_tool, search_web_tool]
+        prompt = SYSTEM_PROMPT_SEARCH
+    else:
+        tools = [decompose_topic_tool, search_local_documents_tool]
+        prompt = SYSTEM_PROMPT_SEARCH_NO_WEB
+    llm = get_llm().bind_tools(tools=tools)
+    messages = [SystemMessage(content=prompt)] + state['messages']
     response = llm.invoke(messages)
     return {"messages": [response]}
 
@@ -40,8 +53,11 @@ def research_tools_node_handler(state: AgentState) -> AgentState:
             result = search_local_documents_tool.invoke(tool_args)
             local_results = result
         elif tool_name == 'search_web_tool':
-            result = search_web_tool.invoke(tool_args)
-            web_results = result
+            if not state.get('web_enabled', True):
+                result = "Web search is disabled."
+            else:
+                result = search_web_tool.invoke(tool_args)
+                web_results = result
         elif tool_name == 'decompose_topic_tool':
             result = decompose_topic_tool.invoke(tool_args)
         else:

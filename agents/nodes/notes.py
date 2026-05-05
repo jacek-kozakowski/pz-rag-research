@@ -21,106 +21,94 @@ def _fix_latex(text: str) -> str:
     )
     return text
 
-notes_tools = [search_local_documents_tool, search_web_tool]
+_MATH_FORMAT = """MATH FORMATTING — the renderer supports ONLY $...$ (inline) and $$...$$ (display block):
+  - WRONG: \\(O(n \\log n)\\)  →  RIGHT: $O(n \\log n)$
+  - WRONG: \\[f(x) = x^2\\]   →  RIGHT: $$f(x) = x^2$$
+  - WRONG: 𝑛, 𝒪, 𝑥 (Unicode math)  →  RIGHT: $n$, $\\mathcal{O}$, $x$
+  - WRONG: O(n log n) plain text  →  RIGHT: $O(n \\log n)$
+  - Every variable, formula, complexity, subscript, superscript MUST be inside $...$"""
 
-EXTRACT_SYSTEM_PROMPT = """You are a precise content extractor. Your job is to extract ALL substantive academic content from a course document.
+EXTRACT_SYSTEM_PROMPT = f"""You are a precise content extractor. Extract ALL substantive academic content from the document.
 
-Extract thoroughly:
+Extract:
 - Every key concept, definition, and theorem with exact wording
-- All algorithms with their full steps, pseudocode, and time/space complexity
+- All algorithms with full steps, pseudocode, and time/space complexity
 - All formulas and mathematical relationships
 - All examples, including numerical ones
 - Comparisons between methods (pros, cons, when to use)
-- Edge cases, limitations, and special cases mentioned
+- Edge cases, limitations, and special cases
 
-SKIP completely:
-- Lecturer name, email, office hours
-- Course schedule, meeting times, deadlines
-- Administrative announcements
-- Any organizational/logistical information
+SKIP: lecturer info, course schedule, administrative announcements.
 
-PDF MATH REPAIR — PDF extraction often mangles mathematical notation. Fix it during extraction:
-- Duplicated variable+subscript like "x\na\nx\na" or "x a x a" → $x_a$
-- Duplicated variable+superscript like "n\n2\nn\n2" or "n 2 n 2" → $n^2$
-- Standalone letters repeated before a word like "k\nk-elementowy" → "$k$-elementowy"
-- Inline complexity like "O(b d+1 )" or "O(b\nd+1\n)" → $O(b^{d+1})$
-- Any formula written out twice in slightly different forms — keep once, use LaTeX $...$
+PDF MATH REPAIR — fix mangled math during extraction:
+- "x\\na\\nx\\na" or "x a x a" → $x_a$
+- "n\\n2\\nn\\n2" or "n 2 n 2" → $n^2$
+- "k\\nk-elementowy" → "$k$-elementowy"
+- "O(b d+1 )" → $O(b^{{d+1}})$
+- Formulas written twice in slightly different forms — keep once in LaTeX
 
-MATH OUTPUT FORMAT:
-- Use $...$ for all inline math (variables, formulas, complexity)
-- Use $$...$$ for standalone display formulas
-- Never use \(...\) or \[...\]
+{_MATH_FORMAT}
 
-Be specific and detailed — preserve exact names, numbers, complexity classes, and technical details.
-Do NOT add outside knowledge. Only extract what is in the document.
-"""
+Only extract what is in the document — do NOT add outside knowledge."""
 
-NOTES_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes from course materials.
-These notes will be used by a student to prepare for an exam and must be thorough enough to study from alone.
+NOTES_SYSTEM_PROMPT = f"""You are a learning notes specialist creating exam-ready notes from course materials.
+The provided extracts are the single source of truth — do NOT add facts, definitions, or examples not present in them.
+If there is no relevant information in the extracts, write "Not enough information" or "N/A".
 
-The provided extracts are the course material — treat them as the single source of truth.
-
-Notes structure (translate ALL section headings to match the language of the notes):
-1. **Key Concepts** — precise definitions exactly as defined in the material, with formal notation where present
-2. **Detailed Explanations** — for EACH major topic: full explanation of how and why it works, all steps/mechanisms, specific values, formulas, or rules mentioned in the material
-3. **Comparisons** — compare related concepts, methods or approaches against each other where relevant
-4. **Common Mistakes & Pitfalls** — typical errors and misconceptions from the material
-5. **Practical Examples** — concrete examples from the documents (numerical, real-world, case studies)
-6. **Flashcards** — at least 10 Q&A pairs covering definitions, key facts, and distinctions
-7. **Review Questions** — at least 5 open-ended questions that test deep understanding
+Notes structure (translate ALL headings to match the language of the query):
+1. **Key Concepts** — precise definitions exactly as in the material
+2. **Detailed Explanations** — how and why each topic works, all steps and formulas from the material
+3. **Comparisons** — compare related concepts where relevant
+4. **Common Mistakes & Pitfalls** — errors and misconceptions from the material
+5. **Practical Examples** — concrete examples from the documents
+6. **Flashcards** — at least 10 Q&A pairs
+7. **Review Questions** — at least 5 open-ended questions
 
 Rules:
-- Every section must be grounded in the provided extracts — no generic filler
-- Cover ALL topics from the material, not just the most obvious ones
-- Be specific: exact names, numbers, formulas, classifications as they appear in the material
-- Do NOT abbreviate, summarize or skip any topic — write out everything in full
-- If a topic has subtopics, cover each subtopic separately and in depth
-- Notes must be in the same language as the user query — this includes ALL section headings, not just the body text
+- Grounded strictly in the extracts — no generic filler or invented content
+- Cover ALL topics from the material in full — do not skip or abbreviate
+- Notes in the same language as the user query
+- Do NOT add a title heading at the top
 - Use clear Markdown formatting
-- Do NOT add a title heading (# ...) at the top — the section header with the source filename is already provided externally
-- MATH FORMATTING — the renderer supports ONLY $...$ (inline) and $$...$$ (display block):
-  - WRONG: \(O(n \log n)\)  →  RIGHT: $O(n \log n)$
-  - WRONG: \[f(x) = x^2\]   →  RIGHT: $$f(x) = x^2$$
-  - WRONG: ( O(n \log n) )  →  RIGHT: $O(n \log n)$
-  - WRONG: [ \begin{cases}...\end{cases} ]  →  RIGHT: $$\begin{cases}...\end{cases}$$
-  - WRONG: 𝑛, 𝒪, 𝑥 (Unicode math)  →  RIGHT: $n$, $\mathcal{O}$, $x$
-  - WRONG: O(n log n) plain text  →  RIGHT: $O(n \log n)$
-  - Every variable, formula, complexity, subscript, superscript MUST be inside $...$
-"""
+{_MATH_FORMAT}"""
 
-NOTES_RESEARCH_SYSTEM_PROMPT = """You are a learning notes specialist. Your job is to create comprehensive, in-depth learning notes.
-These notes will be used by a student to learn the given topic and should be a good foundation for further study.
-You have access to search tools — use them to expand on concepts that need deeper explanation beyond what the summary provides.
 
-Your workflow:
-1. Read the summary and the raw research data (local documents + web findings) provided
-2. List the key concepts from the data
-3. For each key concept, use search_web_tool to find deeper explanations, examples and common mistakes
-4. Use search_local_documents_tool to find any additional relevant material from local documents
-5. Generate the final notes using all collected information
+def _make_research_prompt(web_enabled: bool) -> str:
+    if web_enabled:
+        tools_line = "You have access to search_local_documents_tool and search_web_tool."
+        workflow = (
+            "1. Read the provided summary and research data\n"
+            "2. Use search_local_documents_tool to find relevant material in local documents\n"
+            "3. Use search_web_tool to supplement with additional explanations and examples\n"
+            "4. Write notes using ONLY information gathered above — do not invent facts"
+        )
+    else:
+        tools_line = "You have access to search_local_documents_tool only — do NOT search the web."
+        workflow = (
+            "1. Read the provided summary and research data\n"
+            "2. Use search_local_documents_tool to find relevant material in local documents\n"
+            "3. Write notes using ONLY information gathered above — do not invent facts"
+        )
+    return f"""You are a learning notes specialist creating comprehensive notes for a student.
+Only use information found through the provided tools and research data — do not add outside knowledge or invented content.
+{tools_line}
 
-Notes structure (translate ALL section headings to match the language of the notes):
-1. Key Concepts - comprehensive definitions and explanations of the main concepts
-2. Detailed Explanations - deep dive with examples, mechanisms (not just what, but why and how)
-3. Common Mistakes & Pitfalls - typical errors and misconceptions
-4. Practical Examples - real-world usage examples
-5. Flashcards - Q&A pairs for memorization (at least 5)
-6. Review Questions - open-ended questions to test understanding (at least 3)
+Workflow:
+{workflow}
+
+Notes structure (translate ALL headings to match the language of the query):
+1. Key Concepts — precise definitions
+2. Detailed Explanations — how and why it works, with examples
+3. Common Mistakes & Pitfalls
+4. Practical Examples
+5. Flashcards — Q&A pairs (at least 5)
+6. Review Questions (at least 3)
 
 Rules:
-- Do not include code snippets unless the user explicitly asked for them
-- Focus on depth of understanding, not surface-level definitions
-- Notes must be in the same language as the user query — this includes ALL section headings, not just the body text
+- No code snippets unless explicitly requested
+- Notes in the same language as the query
 - Use clear Markdown formatting
-- MATH FORMATTING — the renderer supports ONLY $...$ (inline) and $$...$$ (display block):
-  - WRONG: \(O(n \log n)\)  →  RIGHT: $O(n \log n)$
-  - WRONG: \[f(x) = x^2\]   →  RIGHT: $$f(x) = x^2$$
-  - WRONG: ( O(n \log n) )  →  RIGHT: $O(n \log n)$
-  - WRONG: [ \begin{cases}...\end{cases} ]  →  RIGHT: $$\begin{cases}...\end{cases}$$
-  - WRONG: 𝑛, 𝒪, 𝑥 (Unicode math)  →  RIGHT: $n$, $\mathcal{O}$, $x$
-  - WRONG: O(n log n) plain text  →  RIGHT: $O(n \log n)$
-  - Every variable, formula, complexity, subscript, superscript MUST be inside $...$
-"""
+{_MATH_FORMAT}"""
 
 
 def _notes_from_local_files(state: AgentState) -> AgentState:
@@ -165,7 +153,10 @@ def _notes_from_local_files(state: AgentState) -> AgentState:
 
 
 def _notes_from_research(state: AgentState) -> AgentState:
-    llm = get_llm().bind_tools([search_local_documents_tool, search_web_tool])
+    web_enabled = state.get('web_enabled', True)
+    tools = [search_local_documents_tool, search_web_tool] if web_enabled else [search_local_documents_tool]
+    llm = get_llm().bind_tools(tools)
+    prompt = _make_research_prompt(web_enabled)
 
     local_result = state.get('local_result', {})
     web_result = state.get('web_result', {})
@@ -173,10 +164,11 @@ def _notes_from_research(state: AgentState) -> AgentState:
     context = f"Topic: {state['query']}\n\n"
     context += f"Summary:\n{state.get('summary', '')}\n\n"
     context += f"Local documents findings:\n{local_result.get('answer', 'No local data')}\n\n"
-    context += f"Web research findings:\n{web_result.get('answer', 'No web data')}"
+    if web_enabled:
+        context += f"Web research findings:\n{web_result.get('answer', 'No web data')}"
 
     messages = [
-        SystemMessage(content=NOTES_RESEARCH_SYSTEM_PROMPT),
+        SystemMessage(content=prompt),
         HumanMessage(content=context)
     ]
 
@@ -191,7 +183,7 @@ def _notes_from_research(state: AgentState) -> AgentState:
             tool_name = tool_call['name']
             if tool_name == 'search_local_documents_tool':
                 result = search_local_documents_tool.invoke(tool_call['args'])
-            elif tool_name == 'search_web_tool':
+            elif tool_name == 'search_web_tool' and web_enabled:
                 result = search_web_tool.invoke(tool_call['args'])
             else:
                 result = f"Unknown tool: {tool_name}"

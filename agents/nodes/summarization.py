@@ -1,6 +1,6 @@
 from agents.state import AgentState
 from research.summarizer import summarize
-from research.planner import plan_task
+from research.planner import plan_task, plan_task_from_notes
 
 
 def summarization_node(state: AgentState) -> AgentState:
@@ -15,6 +15,8 @@ def summarization_node(state: AgentState) -> AgentState:
 
 def task_planner_node(state: AgentState) -> AgentState:
     print("Task planner node executing...")
-    content = state.get('summary') or state.get('notes', '')
-    tasks = plan_task(content, state['query'])
+    if state.get('intent') == 'local_files':
+        tasks = plan_task_from_notes(state.get('notes', ''), state['query'])
+    else:
+        tasks = plan_task(state.get('summary', ''), state['query'])
     return {"tasks": tasks}

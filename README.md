@@ -1,77 +1,149 @@
 ## Set Up
 
-### Pobranie requirements
+### 1. Instalacja zależności
 ```bash
 pip install -r requirements.txt
 ```
-### Wypełnienie pliku .env
-Zgodnie z plikiem .env.example i [API_MANUAL](API_MANUAL.md)
-### Pobranie ollama 
-1. Pobranie ollamy - Package manager albo ze strony
-2. Pobranie modelu 
+
+### 2. Wypełnienie pliku .env
 ```bash
-ollama pull llama3.2
+cp .env.example .env
 ```
-### Włączenie minio w dockerze
+Uzupełnij klucze zgodnie z [API_MANUAL](API_MANUAL.md). Wymagany jest co najmniej jeden klucz LLM (OpenAI lub Groq) lub lokalna Ollama.
+
+### 3. Uruchomienie MinIO (Docker)
 ```bash
 docker compose up -d
 ```
+MinIO przechowuje wgrane pliki PDF/DOCX. Domyślne dane logowania z `.env.example` działają bez zmian.
 
-### Włączenie aplikacji Streamlit
+### 4. (Opcjonalnie) Ollama jako fallback LLM
+```bash
+ollama pull mistral
+```
+Używane automatycznie gdy brak kluczy OpenAI i Groq.
+
+### 5. Uruchomienie aplikacji
+
+**UI (Streamlit):**
 ```bash
 streamlit run ui/app.py
 ```
-## Struktura projektu
 
-```
-multi-agent-research/
-│
-├── .env                          # klucze API (OPENAI_API_KEY itp.)
-├── requirements.txt
-├── README.md
-│
-├── main.py                       # punkt wejścia - odpala cały pipeline
-│
-├── agents/
-│   ├── __init__.py
-│   ├── local_researcher.py       # przeszukuje ChromaDB (RAG)
-│   ├── web_researcher.py         # przeszukuje internet (DuckDuckGo)
-│   ├── summarizer.py             # łączy wyniki obu researcherów
-│   ├── planner.py                # tworzy listę zadań z estymacją czasu
-│   └── integrator.py            # eksportuje plan do .ics
-│
-├── rag/
-│   ├── __init__.py
-│   ├── loader.py                 # ładuje PDF/DOCX/TXT przez unstructured
-│   ├── splitter.py               # dzieli tekst na chunki
-│   └── vectorstore.py            # tworzy i odpytuje ChromaDB
-│
-├── calendar_export/
-│   ├── __init__.py
-│   └── ics_builder.py            # buduje plik .ics z listy zadań
-│
-├── ui/
-│   └── app.py                    # interfejs Streamlit
-│
-├── data/
-│   └── uploads/                  # tu użytkownik wrzuca swoje pliki
-│
-└── chroma_db/                    # baza wektorowa (generowana automatycznie)
+**CLI:**
+```bash
+python main.py
 ```
 
 ---
 
-## Przepływ MVP
+## Tryby działania
+
+### Tryb Project
+Generuje pełną dokumentację projektu na podstawie opisu.
+
 ```
-użytkownik (prompt + pliki)
+research_agent → summarization → task_planner → scaffolding → github_issues → readme
+```
+
+Wyjścia: podsumowanie, plan zadań, szkielet plików projektu, GitHub issues, README.md
+
+### Tryb Learning
+Tworzy notatki edukacyjne z zaindeksowanych dokumentów lub z internetu.
+
+```
+detect_intent → local_files: notes
+             → research: research_agent → summarization → task_planner → (calendar →)? notes
+```
+
+- **local_files** — zapytanie dotyczy zaindeksowanych plików (PDF/DOCX z MinIO) → notatki z własnych materiałów
+- **research** — temat spoza bazy → research webowy + notatki
+
+Wyjścia: notatki w Markdown, (opcjonalnie) wydarzenia w Google Calendar
+
+---
+
+## Struktura projektu
+
+```
+RAGResearch/
+├── .env
+├── requirements.txt
+├── main.py                        # punkt wejścia CLI
+│
+├── agents/
+│   ├── __init__.py               # get_llm() — fabryka modeli (OpenAI/Groq/Ollama)
+│   ├── state.py                  # AgentState — wspólny stan grafu
+│   ├── graph.py                  # build_project_graph(), build_learning_graph()
+│   ├── code_supervisor.py
+│   └── nodes/
+│       ├── detect_intent.py      # klasyfikacja zapytania: local_files vs research
+│       ├── research.py           # agent badawczy z narzędziami
+│       ├── summarization.py      # podsumowanie + planowanie zadań
+│       ├── notes.py              # generowanie notatek edukacyjnych
+│       ├── scaffolding.py        # generowanie szkieletu projektu
+│       ├── github_issues.py      # tworzenie GitHub issues
+│       ├── readme.py             # generowanie README
+│       └── calendar.py          # eksport do Google Calendar
+│
+├── rag/
+│   ├── loader.py                 # ładowanie PDF/DOCX z MinIO
+│   ├── splitter.py               # podział dokumentów na chunki
+│   ├── vector_storage.py         # ChromaDB (zapis, wyszukiwanie, find_relevant_sources)
+│   └── minio_storage.py          # operacje na plikach w MinIO
+│
+├── research/
+│   ├── local_researcher.py       # RAG Q&A na ChromaDB
+│   ├── web_researcher.py         # wyszukiwanie webowe (Tavily / DuckDuckGo)
+│   ├── research_tools.py         # narzędzia LangChain
+│   ├── query_planner.py
+│   ├── topic_decomposition.py
+│   ├── summarizer.py
+│   └── exporter.py
+│
+├── code/
+│   ├── code_tools.py
+│   └── loader.py
+│
+├── ui/
+│   ├── app.py                    # interfejs Streamlit
+│   └── components/
+│       ├── sidebar.py            # sidebar (upload plików, ustawienia)
+│       └── styles.py
+│
+├── tests/
+│   └── test_github_issues.py
+│
+└── chroma_research/              # baza wektorowa ChromaDB (generowana automatycznie)
+```
+
+---
+
+## Przepływ danych
+
+```
+użytkownik (prompt + pliki PDF/DOCX)
         ↓
-    [Streamlit UI]
+    [Streamlit UI / CLI]
         ↓
-  local_researcher  ←→  chroma_db (RAG z plików)
-  web_researcher    ←→  DuckDuckGo
-        ↓
-    summarizer      →   spójny raport tekstowy
-        ↓
-     planner        →   lista zadań [{nazwa, czas, priorytet}]
-        ↓
-   integrator      
+   detect_intent
+        ├── local_files ──→ ChromaDB (RAG z własnych plików) ──→ notes
+        └── research ─────→ local_researcher (ChromaDB)
+                           web_researcher (Tavily/DuckDuckGo)
+                                ↓
+                          summarization → task_planner
+                                ↓                 ↓
+                          (calendar)          scaffolding
+                                ↓             github_issues
+                            notes              readme
+```
+
+---
+
+## Dostawcy LLM (priorytet)
+
+| Priorytet | Dostawca | Klucz | Modele |
+|-----------|----------|-------|--------|
+| 1 | OpenAI | `OPENAI_API_KEY` | `gpt-4o-mini` (default), `gpt-4o` (notatki, planer) |
+| 2 | Groq | `GROQ_API_KEY` | `llama-3.1-8b-instant` (default), `llama-3.3-70b-versatile` (notatki) |
+| 3 | Ollama | — | `mistral` (lokalnie) |

@@ -3,6 +3,8 @@ from agents import get_llm
 
 PROMPT_TEMPLATE = """You are a research analyst. Create a concise summary based on the sources below.
 IMPORTANT: Respond in the same language as the user's question.
+Use the context below to answer, do not make up an answer. If there is no relevant information in the context, say "No information found".
+If you don't know the answer, say that you don't know. Do not try to make up an answer.
 
 User's goal: {query}
 
@@ -37,7 +39,7 @@ def summarize(query: str, local_result: dict, web_result: dict) -> dict:
         "web_answer": web_answer,
         "query": query
     })
-
+    print(f"[DEBUG] Summary: {summary.content}")
     return {
         "summary": summary.content,
         "local_answer": local_answer,

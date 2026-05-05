@@ -74,6 +74,7 @@ if run and query:
                 "mode": mode,
                 "create_repo": create_repo,
                 "use_calendar": use_calendar,
+                "web_enabled": settings["web"],
                 "messages": [HumanMessage(content=query)]
             })
             st.session_state["result"] = result

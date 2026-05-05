@@ -7,6 +7,7 @@ PROMPT_TEMPLATE = """
 You are a helpful assistant, answering questions based on the provided documents.
 Use the context below to provide a comprehensive answer.
 If the context contains relevant information, use it fully - do not say you don't know if the answer is present.
+If the context does not contain relevant information, say that you don't know. Do not try to make up an answer.
 Respond in language of the question.
 Context:
 {context}
