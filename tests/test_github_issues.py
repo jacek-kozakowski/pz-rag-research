@@ -7,6 +7,8 @@ from agents.nodes.github_issues import (
     _repo_exists,
     _create_repo,
     _repo_name_from_query,
+    _generate_issues_from_scaffold,
+    _push_file_to_repo,
     github_issues_node,
 )
 
@@ -245,6 +247,9 @@ class TestGithubIssuesNode:
         "notes": "",
         "calendar_events": [],
         "intent": "research",
+        "scaffold": [],
+        "language": "Python",
+        "web_enabled": False,
     }
 
     def _state(self, **kwargs):
@@ -282,8 +287,8 @@ class TestGithubIssuesNode:
         assert result["github_issues"][0]["title"] == "Set up CI"
 
     @patch("agents.nodes.github_issues.requests.post")
-    def test_issue_labels_include_priority_and_duration(self, mock_post):
-        task = {"title": "Task", "description": "Desc", "priority": "medium", "duration_minutes": 30}
+    def test_issue_labels_include_priority(self, mock_post):
+        task = {"title": "Task", "description": "Desc", "priority": "medium"}
         mock_post.return_value = _mock_response(201, {
             "number": 2,
             "title": "Task",
@@ -294,11 +299,10 @@ class TestGithubIssuesNode:
             github_issues_node(self._state(tasks=[task]))
 
         posted_json = mock_post.call_args.kwargs["json"]
-        assert "time:30min" in posted_json["labels"]
         assert "priority:medium" in posted_json["labels"]
 
     @patch("agents.nodes.github_issues.requests.post")
-    def test_issue_labels_empty_when_no_metadata(self, mock_post):
+    def test_issue_labels_default_priority_when_missing(self, mock_post):
         task = {"title": "Task", "description": "Desc"}
         mock_post.return_value = _mock_response(201, {
             "number": 3,
@@ -310,7 +314,7 @@ class TestGithubIssuesNode:
             github_issues_node(self._state(tasks=[task]))
 
         posted_json = mock_post.call_args.kwargs["json"]
-        assert posted_json["labels"] == []
+        assert posted_json["labels"] == ["priority:medium"]
 
     @patch("agents.nodes.github_issues.requests.post")
     def test_skips_failed_issues(self, mock_post):
@@ -375,3 +379,152 @@ class TestGithubIssuesNode:
 
         mock_post.assert_not_called()
         assert result == {"github_issues": []}
+
+    @patch("agents.nodes.github_issues._push_file_to_repo", return_value="https://github.com/user/repo/blob/main/app.py")
+    @patch("agents.nodes.github_issues._generate_issues_from_scaffold")
+    @patch("agents.nodes.github_issues.requests.post")
+    def test_scaffold_flow_creates_issues_and_pushes_files(self, mock_post, mock_gen, mock_push):
+        scaffold = [{"filepath": "app.py", "purpose": "Entry point", "code": "# stub"}]
+        mock_gen.return_value = [{"title": "Implement app", "description": "Fill in stubs", "priority": "high"}]
+        issue_resp = _mock_response(201, {
+            "number": 10,
+            "title": "Implement app",
+            "html_url": "https://github.com/user/repo/issues/10",
+        })
+        comment_resp = _mock_response(201, {})
+        mock_post.side_effect = [issue_resp, comment_resp]
+
+        with patch.dict(os.environ, {"GITHUB_TOKEN": FAKE_TOKEN, "GITHUB_REPO": "user/repo"}):
+            result = github_issues_node(self._state(scaffold=scaffold, summary="An AI app"))
+
+        mock_gen.assert_called_once_with("An AI app", scaffold)
+        mock_push.assert_called_once_with(FAKE_TOKEN, "user/repo", "app.py", "# stub")
+        assert len(result["github_issues"]) == 1
+        assert result["github_issues"][0]["number"] == 10
+
+    @patch("agents.nodes.github_issues._generate_issues_from_scaffold")
+    @patch("agents.nodes.github_issues.requests.post")
+    def test_scaffold_flow_uses_llm_issues_not_tasks(self, mock_post, mock_gen):
+        scaffold = [{"filepath": "main.py", "purpose": "Main", "code": "pass"}]
+        mock_gen.return_value = [{"title": "Write tests", "description": "Add unit tests", "priority": "medium"}]
+        mock_post.return_value = _mock_response(201, {
+            "number": 11,
+            "title": "Write tests",
+            "html_url": "https://github.com/user/repo/issues/11",
+        })
+
+        tasks = [{"title": "Should be ignored", "description": "Ignored task", "priority": "low"}]
+        with patch.dict(os.environ, {"GITHUB_TOKEN": FAKE_TOKEN, "GITHUB_REPO": "user/repo"}):
+            result = github_issues_node(self._state(scaffold=scaffold, tasks=tasks, summary="proj"))
+
+        assert result["github_issues"][0]["title"] == "Write tests"
+
+
+# ---------------------------------------------------------------------------
+# _generate_issues_from_scaffold
+# ---------------------------------------------------------------------------
+
+class TestGenerateIssuesFromScaffold:
+    @patch("agents.nodes.github_issues.get_llm")
+    def test_returns_parsed_issues(self, mock_get_llm):
+        issues = [{"title": "Write tests", "description": "Add unit tests", "priority": "high"}]
+        llm_response = MagicMock()
+        llm_response.content = '[{"title": "Write tests", "description": "Add unit tests", "priority": "high"}]'
+        chain = MagicMock()
+        chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+
+        with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
+            mock_pt.return_value.__or__ = MagicMock(return_value=chain)
+            result = _generate_issues_from_scaffold("An AI project", [{"filepath": "app.py", "purpose": "Entry"}])
+
+        assert result == issues
+
+    @patch("agents.nodes.github_issues.get_llm")
+    def test_returns_empty_list_on_invalid_json(self, mock_get_llm):
+        llm_response = MagicMock()
+        llm_response.content = "not valid json at all"
+        chain = MagicMock()
+        chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+
+        with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
+            mock_pt.return_value.__or__ = MagicMock(return_value=chain)
+            result = _generate_issues_from_scaffold("proj", [])
+
+        assert result == []
+
+    @patch("agents.nodes.github_issues.get_llm")
+    def test_strips_markdown_fences(self, mock_get_llm):
+        llm_response = MagicMock()
+        llm_response.content = '```json\n[{"title": "T", "description": "D", "priority": "low"}]\n```'
+        chain = MagicMock()
+        chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+
+        with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
+            mock_pt.return_value.__or__ = MagicMock(return_value=chain)
+            result = _generate_issues_from_scaffold("proj", [])
+
+        assert result == [{"title": "T", "description": "D", "priority": "low"}]
+
+    @patch("agents.nodes.github_issues.get_llm")
+    def test_returns_empty_list_when_llm_returns_non_list(self, mock_get_llm):
+        llm_response = MagicMock()
+        llm_response.content = '{"title": "single issue"}'
+        chain = MagicMock()
+        chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+
+        with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
+            mock_pt.return_value.__or__ = MagicMock(return_value=chain)
+            result = _generate_issues_from_scaffold("proj", [])
+
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _push_file_to_repo
+# ---------------------------------------------------------------------------
+
+class TestPushFileToRepo:
+    @patch("agents.nodes.github_issues.requests.put")
+    def test_returns_html_url_on_success(self, mock_put):
+        mock_put.return_value = _mock_response(201, {
+            "content": {"html_url": "https://github.com/user/repo/blob/main/app.py"}
+        })
+
+        result = _push_file_to_repo(FAKE_TOKEN, "user/repo", "app.py", "print('hello')")
+
+        assert result == "https://github.com/user/repo/blob/main/app.py"
+
+    @patch("agents.nodes.github_issues.requests.put")
+    def test_returns_none_on_failure(self, mock_put):
+        mock_put.return_value = _mock_response(422, text="Invalid")
+
+        result = _push_file_to_repo(FAKE_TOKEN, "user/repo", "app.py", "code")
+
+        assert result is None
+
+    @patch("agents.nodes.github_issues.requests.put")
+    def test_encodes_content_as_base64(self, mock_put):
+        import base64
+        mock_put.return_value = _mock_response(201, {"content": {"html_url": "https://github.com/u/r/blob/main/f.py"}})
+
+        _push_file_to_repo(FAKE_TOKEN, "user/repo", "f.py", "hello")
+
+        sent = mock_put.call_args.kwargs["json"]
+        assert sent["content"] == base64.b64encode(b"hello").decode()
+
+    @patch("agents.nodes.github_issues.requests.put")
+    def test_commit_message_includes_filepath(self, mock_put):
+        mock_put.return_value = _mock_response(201, {"content": {"html_url": "https://github.com/u/r/blob/main/src/main.py"}})
+
+        _push_file_to_repo(FAKE_TOKEN, "user/repo", "src/main.py", "code")
+
+        sent = mock_put.call_args.kwargs["json"]
+        assert "src/main.py" in sent["message"]

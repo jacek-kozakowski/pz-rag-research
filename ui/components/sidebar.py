@@ -39,34 +39,39 @@ def render_sidebar() -> dict:
         
         col_type = st.radio("Target Collection:", ["Research", "Code"], horizontal=True)
         
-        uploaded_file = st.file_uploader(
-            "Drop file here",
+        uploaded_files = st.file_uploader(
+            "Drop files here",
             type=["pdf", "docx", "txt", "py", "js", "ts", "go", "rs", "java", "cpp", "c", "h", "cs"],
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            accept_multiple_files=True,
         )
 
-        if uploaded_file:
+        if uploaded_files:
             if st.button("INDEX →"):
-                with st.spinner("Indexing..."):
+                collection = col_type.lower()
+                progress = st.progress(0, text=f"0 / {len(uploaded_files)}")
+                ok, errors = 0, []
+                for i, uploaded_file in enumerate(uploaded_files):
                     try:
                         filename = uploaded_file.name
-                        collection = col_type.lower()
-                        
-                        # Only upload to MinIO for research docs (optional, but keep for consistency with existing loader)
                         if collection == "research":
                             upload_bytes(uploaded_file.read(), filename)
                             docs = load_from_minio(filename)
                         else:
-                            # For code files uploaded directly, we can wrap them in a Document
                             from langchain_core.documents import Document
                             content = uploaded_file.read().decode('utf-8', errors='ignore')
                             docs = [Document(page_content=content, metadata={"source": filename})]
-
                         chunks = split_documents(docs)
                         save_to_db(chunks, source_file=filename, collection_type=collection)
-                        st.success(f"✓ {filename} ({collection})")
+                        ok += 1
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        errors.append(f"{uploaded_file.name}: {e}")
+                    progress.progress((i + 1) / len(uploaded_files), text=f"{i + 1} / {len(uploaded_files)}: {uploaded_file.name}")
+                progress.empty()
+                st.success(f"✓ Indexed {ok} / {len(uploaded_files)} files")
+                if errors:
+                    with st.expander(f"⚠ {len(errors)} errors"):
+                        st.markdown("\n".join(f"- {e}" for e in errors))
 
         # --- SECTION: FOLDER INDEXING ---
         st.markdown("---")

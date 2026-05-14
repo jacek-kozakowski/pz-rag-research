@@ -1,8 +1,8 @@
 import base64
-import json
 import os
 import re
 import requests
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 
 from agents import get_llm
@@ -113,21 +113,16 @@ def _generate_issues_from_scaffold(summary: str, scaffold: list[dict]) -> list[d
     scaffold_overview = "\n".join(
         f"- {e['filepath']}: {e.get('purpose', '')}" for e in scaffold
     )
-    llm = get_llm()
-    prompt = PromptTemplate(
-        template=ISSUES_FROM_SCAFFOLD_PROMPT,
-        input_variables=["summary", "scaffold_overview"]
+    chain = (
+        PromptTemplate(template=ISSUES_FROM_SCAFFOLD_PROMPT, input_variables=["summary", "scaffold_overview"])
+        | get_llm()
+        | JsonOutputParser()
     )
-    response = (prompt | llm).invoke({"summary": summary, "scaffold_overview": scaffold_overview})
-    raw = re.sub(r'^```(?:json)?\s*', '', response.content.strip())
-    raw = re.sub(r'\s*```$', '', raw)
     try:
-        issues = json.loads(raw)
-        if not isinstance(issues, list):
-            return []
-        return issues
-    except json.JSONDecodeError:
-        print(f"[GitHub Issues] Failed to parse LLM JSON: {raw[:200]}")
+        issues = chain.invoke({"summary": summary, "scaffold_overview": scaffold_overview})
+        return issues if isinstance(issues, list) else []
+    except Exception as e:
+        print(f"[GitHub Issues] Failed to parse LLM JSON: {e}")
         return []
 
 

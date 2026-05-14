@@ -1,81 +1,91 @@
-import json
-import re
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 
 from agents import get_llm
 from agents.state import AgentState
 
-DETECT_LANGUAGE_PROMPT = """Identify the primary programming language requested or implied by this project query.
+DETECT_STACK_PROMPT = """Identify the full technology stack requested or implied by this project query.
 Query: {query}
-Rules:
-- Return a single word, e.g. Python, TypeScript, Go, Rust, Java, C++, C#, Ruby, PHP
-- If unclear, return Python
-Return ONLY the language name, nothing else.
+
+Return a JSON object with exactly these keys:
+  "primary_language" – the main backend language (e.g. Python, TypeScript, Go)
+  "stack"            – list of all technologies/frameworks explicitly mentioned or strongly implied
+                       (e.g. ["FastAPI", "React", "PostgreSQL", "Redis"])
+  "is_fullstack"     – true if the project has both a backend and a frontend
+
+Return ONLY valid JSON, no markdown.
 """
 
-SCAFFOLDING_PROMPT = """You are a software architect generating a {language} project scaffold.
+SCAFFOLDING_PROMPT = """You are a software architect generating a project scaffold.
+
+Original request: {query}
 
 Project description:
 {summary}
 
-Design a realistic, idiomatic {language} project file structure for this project.
-Think about the project as a whole — what modules, packages, and files a real developer would create.
+Tech stack: {stack}
+
+Design a realistic, production-quality file structure that covers the ENTIRE stack described above.
 
 Rules:
-- Group related functionality into the same file (e.g. auth routes in one file, not login.py + register.py separately)
-- Never create files whose sole purpose is to describe a task or list installation steps
-- Use conventional project layout for {language} (e.g. src/, app/, tests/, etc.)
-- Each file must contain real, syntactically valid {language} code with function/class stubs
-- Aim for 5–15 files that cover the full project structure
-- filepath must be a valid relative path with the correct extension for {language}
+- Honor every framework and technology explicitly named in the original request — do NOT substitute (e.g. if FastAPI is requested, use FastAPI not Flask; if React is requested, create a React frontend)
+- For fullstack projects create separate top-level directories for backend and frontend (e.g. backend/, frontend/)
+- Group related functionality into the same file (auth routes in one file, not login.py + register.py)
+- Use conventional layout for each technology (FastAPI → routers/, models/, schemas/; React → src/components/, src/pages/)
+- Write real, working code. For straightforward logic (CRUD routes, React components, models, config) write the full implementation. For genuinely complex algorithms you may leave a `# TODO` only if you explain exactly what goes there in a comment.
+  Target quality: a React component should have real hooks, real JSX and real API calls. A FastAPI route should query the DB and return the right schema. A SQLAlchemy model should have all columns and relationships.
+  Never write an empty function body with just `pass` or `// TODO implement this`.
+- Cover the core domain logic of the project (e.g. for habit tracker: habits CRUD, streak calculation, daily check-ins) — not just auth/user boilerplate
+- Aim for 10–20 files that cover the full project
+- filepath must be a valid relative path with the correct extension
 
 Return a JSON array. Each element must have exactly these keys:
   "filepath"  – relative path of the file
   "purpose"   – one sentence describing what this file does
-  "code"      – {language} source code with stubs
+  "code"      – scaffold source code
 
 Return ONLY valid JSON. No markdown, no explanations.
 """
 
 
-def _detect_language(query: str) -> str:
-    llm = get_llm()
-    prompt = PromptTemplate(template=DETECT_LANGUAGE_PROMPT, input_variables=["query"])
-    response = (prompt | llm).invoke({"query": query})
-    return response.content.strip() or "Python"
+_json = JsonOutputParser()
+
+_STACK_FALLBACK = {"primary_language": "Python", "stack": ["Python"], "is_fullstack": False}
+
+
+def _detect_stack(query: str) -> dict:
+    chain = PromptTemplate(template=DETECT_STACK_PROMPT, input_variables=["query"]) | get_llm() | _json
+    try:
+        return chain.invoke({"query": query})
+    except Exception:
+        return _STACK_FALLBACK
 
 
 def scaffolding_node(state: AgentState) -> AgentState:
     print("Scaffolding node executing...")
     summary = state.get('summary', '')
+    query = state.get('query', '')
 
     if not summary:
         return {"scaffold": [], "language": "Python"}
 
-    language = state.get('language') or _detect_language(state.get('query', ''))
-    print(f"[Scaffold] Detected language: {language}")
+    stack_info = _detect_stack(query)
+    language = stack_info.get("primary_language", "Python")
+    stack_label = ", ".join(stack_info.get("stack", [language]))
+    print(f"[Scaffold] Stack: {stack_label} | fullstack: {stack_info.get('is_fullstack')}")
 
-    llm = get_llm()
-    prompt = PromptTemplate(
-        template=SCAFFOLDING_PROMPT,
-        input_variables=["language", "summary"]
+    chain = (
+        PromptTemplate(template=SCAFFOLDING_PROMPT, input_variables=["query", "summary", "stack"])
+        | get_llm(task="code")
+        | _json
     )
-    chain = prompt | llm
-    response = chain.invoke({
-        "language": language,
-        "summary": summary,
-    })
-
-    raw = response.content.strip()
-    raw = re.sub(r'^```(?:json)?\s*', '', raw)
-    raw = re.sub(r'\s*```$', '', raw)
 
     try:
-        scaffold = json.loads(raw)
+        scaffold = chain.invoke({"query": query, "summary": summary, "stack": stack_label})
         if not isinstance(scaffold, list):
             scaffold = []
-    except json.JSONDecodeError:
-        print(f"[Scaffold] Failed to parse LLM JSON: {raw[:200]}")
+    except Exception as e:
+        print(f"[Scaffold] Failed to parse LLM JSON: {e}")
         scaffold = []
 
     for entry in scaffold:

@@ -1,6 +1,8 @@
 import re
 
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
 
 from agents import get_llm
 from agents.state import AgentState
@@ -111,17 +113,84 @@ Rules:
 {_MATH_FORMAT}"""
 
 
+_JUDGE_PROMPT = """You are a file relevance judge. The user wants notes on a specific topic/subject.
+You will receive a numbered list of candidate files (filename + excerpts).
+
+Your task: return the indices (1-based) of files that are relevant to the queried topic.
+
+Rules:
+- Use the filename as the primary signal when it contains a subject abbreviation (e.g. "PEA", "PIW", "BD").
+- Include a file if its content or filename matches the queried subject.
+- Return a JSON object with key "relevant" containing a list of integers, e.g. {{"relevant": [1, 3, 4]}}
+- If no files are relevant, return {{"relevant": []}}
+
+Query: {query}
+
+Candidate files:
+{candidates}"""
+
+_judge_chain = None
+
+
+def _get_judge_chain():
+    global _judge_chain
+    if _judge_chain is None:
+        _judge_chain = (
+            PromptTemplate(template=_JUDGE_PROMPT, input_variables=["query", "candidates"])
+            | get_llm()
+            | JsonOutputParser()
+        )
+    return _judge_chain
+
+
+def _llm_filter_sources(query: str, candidates: list[str]) -> list[str]:
+    """Use LLM to keep only files genuinely relevant to the query subject."""
+    from rag.vector_storage import load_db
+
+    if len(candidates) <= 1:
+        return candidates
+
+    db = load_db("research")
+    file_summaries = []
+    for i, filename in enumerate(candidates, 1):
+        results = db.get(where={"source": filename}, limit=3, include=["documents"])
+        excerpts = "\n   ---\n   ".join(d[:300] for d in results["documents"]) if results["documents"] else "(no sample)"
+        file_summaries.append(f"{i}. FILE: {filename}\n   EXCERPTS: {excerpts}")
+
+    try:
+        result = _get_judge_chain().invoke({
+            "query": query,
+            "candidates": "\n\n".join(file_summaries),
+        })
+        indices = result.get("relevant", [])
+        print(f"LLM judge response: {result}")
+    except Exception as e:
+        print(f"LLM judge parse error: {e}, keeping all candidates")
+        return candidates
+
+    if not indices:
+        print("LLM judge: no relevant files found")
+        return []
+
+    kept = [candidates[i - 1] for i in indices if 1 <= i <= len(candidates)]
+    print(f"LLM judge: {candidates} -> {kept}")
+    return kept if kept else candidates
+
+
 def _notes_from_local_files(state: AgentState) -> AgentState:
     from rag.vector_storage import find_relevant_sources
     from rag.minio_storage import load_full_documents
 
-    llm = get_llm()
-
     # Find relevant files
-    selected = find_relevant_sources(state['query'])
-    print(f"Selected files for full load: {selected}")
-    if not selected:
+    candidates = find_relevant_sources(state['query'])
+    print(f"Candidates from vector search: {candidates}")
+    if not candidates:
         print("No relevant sources found, aborting notes generation")
+        return {"notes": "No relevant documents found for this topic."}
+
+    selected = _llm_filter_sources(state['query'], candidates)
+    print(f"Selected files after LLM judge: {selected}")
+    if not selected:
         return {"notes": "No relevant documents found for this topic."}
 
     # MAP — extract then write notes for each file in parallel
