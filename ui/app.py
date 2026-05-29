@@ -59,23 +59,47 @@ with col2:
         st.session_state.pop("detected_mode", None)
         st.rerun()
 
+_NODE_LABELS = {
+    "detect_intent":  "Detecting intent",
+    "research_agent": "Researching",
+    "research_tools": "Running search tools",
+    "summarization":  "Summarizing findings",
+    "task_planner":   "Planning tasks",
+    "scaffolding":    "Generating scaffold",
+    "github_issues":  "Creating GitHub issues",
+    "readme":         "Writing README",
+    "calendar":       "Adding to Google Calendar",
+    "notes":          "Writing learning notes",
+}
+
 if run and query:
     try:
         with st.spinner("Detecting mode..."):
             mode = detect_mode(query)
         st.session_state["detected_mode"] = mode
 
-        with st.spinner("Researching..."):
-            graph = build_project_graph() if mode == "project" else build_learning_graph()
-            result = graph.invoke({
-                "query": query,
-                "mode": mode,
-                "create_repo": create_repo,
-                "use_calendar": use_calendar,
-                "web_enabled": settings["web"],
-                "messages": [HumanMessage(content=query)]
-            })
-            st.session_state["result"] = result
+        graph = build_project_graph() if mode == "project" else build_learning_graph()
+        input_state = {
+            "query": query,
+            "mode": mode,
+            "create_repo": create_repo,
+            "use_calendar": use_calendar,
+            "web_enabled": settings["web"],
+            "messages": [HumanMessage(content=query)],
+        }
+
+        result = {}
+        with st.status("Starting...", expanded=True) as status:
+            for chunk in graph.stream(input_state, stream_mode="updates"):
+                for node_name, node_output in chunk.items():
+                    label = _NODE_LABELS.get(node_name, node_name)
+                    status.update(label=f"{label}...")
+                    st.write(f"✓ {label}")
+                    if isinstance(node_output, dict):
+                        result.update(node_output)
+            status.update(label="Done!", state="complete", expanded=False)
+
+        st.session_state["result"] = result
     except Exception as e:
         st.error(f"Error: {e}")
 
