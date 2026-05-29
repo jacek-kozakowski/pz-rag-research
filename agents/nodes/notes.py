@@ -54,8 +54,11 @@ PDF MATH REPAIR — fix mangled math during extraction:
 Only extract what is in the document — do NOT add outside knowledge."""
 
 NOTES_SYSTEM_PROMPT = f"""You are a learning notes specialist creating exam-ready notes from course materials.
-The provided extracts are the single source of truth — do NOT add facts, definitions, or examples not present in them.
-If there is no relevant information in the extracts, write "Not enough information" or "N/A".
+
+CRITICAL: The provided extracts are your ONLY source of truth.
+- Do NOT use your training data, general knowledge, or anything not explicitly present in the extracts.
+- If the extracts do not contain relevant information about the queried topic, respond with ONLY: "Brak informacji na ten temat w dostarczonych materiałach." — nothing else.
+- Never write notes about a topic that is not covered in the extracts, even if you know about it from training.
 
 Notes structure (translate ALL headings to match the language of the query):
 1. **Key Concepts** — precise definitions exactly as in the material
@@ -67,7 +70,8 @@ Notes structure (translate ALL headings to match the language of the query):
 7. **Review Questions** — at least 5 open-ended questions
 
 Rules:
-- Grounded strictly in the extracts — no generic filler or invented content
+- Every single fact, definition, example must come directly from the extracts — no filler, no invention
+- If a section has no relevant content in the extracts, write "Brak informacji" for that section — do NOT guess
 - Cover ALL topics from the material in full — do not skip or abbreviate
 - Notes in the same language as the user query
 - Do NOT add a title heading at the top
@@ -92,11 +96,14 @@ def _make_research_prompt(web_enabled: bool) -> str:
             "3. Write notes using ONLY information gathered above — do not invent facts"
         )
     return f"""You are a learning notes specialist creating comprehensive notes for a student.
-Only use information found through the provided tools and research data — do not add outside knowledge or invented content.
+
+CRITICAL: Use ONLY information retrieved through the tools below. Do NOT use your training data or general knowledge.
 {tools_line}
 
 Workflow:
 {workflow}
+
+IMPORTANT: After searching, if the retrieved documents do not contain relevant information about the queried topic, respond with ONLY: "Brak informacji na ten temat w dostarczonych materiałach." — do not write notes based on your own knowledge.
 
 Notes structure (translate ALL headings to match the language of the query):
 1. Key Concepts — precise definitions
@@ -109,24 +116,28 @@ Notes structure (translate ALL headings to match the language of the query):
 Rules:
 - No code snippets unless explicitly requested
 - Notes in the same language as the query
+- Every fact must come from the retrieved documents — no filler, no guessing
 - Use clear Markdown formatting
 {_MATH_FORMAT}"""
 
 
-_JUDGE_PROMPT = """You are a file relevance judge. The user wants notes on a specific topic/subject.
-You will receive a numbered list of candidate files (filename + excerpts).
+_JUDGE_PROMPT = """You are a strict file relevance judge. The user wants notes on a specific topic/subject.
+You will receive a numbered list of candidate files (filename + excerpts). READ THE EXCERPTS CAREFULLY.
 
-Your task: return the indices (1-based) of files that are relevant to the queried topic.
+Your task: return the indices (1-based) of files that are genuinely relevant to the queried topic.
 
 Rules:
-- Use the filename as the primary signal when it contains a subject abbreviation (e.g. "PEA", "PIW", "BD").
-- Include a file if its content or filename matches the queried subject.
+- READ the excerpts — they are the primary evidence. A file that looks relevant by name but whose excerpts contain unrelated content must be EXCLUDED.
+- Use the filename as a secondary signal only (e.g. subject abbreviations like "PEA", "PIW", "BD").
+- Include a file ONLY if its excerpts contain substantive content directly related to the queried topic.
+- Be STRICT: when in doubt, exclude. It is better to miss a marginally related file than to include an irrelevant one.
+- A file is NOT relevant if it only mentions the topic in passing or as part of a list/index.
 - Return a JSON object with key "relevant" containing a list of integers, e.g. {{"relevant": [1, 3, 4]}}
 - If no files are relevant, return {{"relevant": []}}
 
 Query: {query}
 
-Candidate files:
+Candidate files (read the excerpts carefully before deciding):
 {candidates}"""
 
 _judge_chain = None
