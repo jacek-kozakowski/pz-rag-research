@@ -81,9 +81,6 @@ def build_learning_graph():
         "notes": 'notes',
         END: END
     })
-    graph.add_conditional_edges('notes', route_by_intent, {
-        "local_files": 'task_planner',
-        "research": END
-    })
+    graph.add_edge('notes', END)
 
     return graph.compile()

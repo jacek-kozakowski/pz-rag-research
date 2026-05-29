@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from dotenv import load_dotenv
 from agents.graph import build_project_graph, build_learning_graph
+from agents.nodes.detect_mode import detect_mode
 from ui.components.styles import inject_css
 from ui.components.sidebar import render_sidebar
 from langchain_core.messages import HumanMessage
@@ -30,13 +31,6 @@ settings = render_sidebar()
 
 st.markdown("---")
 
-mode = st.radio(
-    "Mode",
-    options=["project", "learning"],
-    horizontal=True,
-    format_func=lambda m: "🛠 Project" if m == "project" else "📚 Learning"
-)
-
 query = st.text_area(
     "Query",
     placeholder="Ask anything about your documents...",
@@ -44,17 +38,16 @@ query = st.text_area(
     label_visibility="collapsed"
 )
 
-create_repo = False
-use_calendar = False
-if mode == "project":
+col_cb1, col_cb2 = st.columns(2)
+with col_cb1:
     create_repo = st.checkbox(
         "Create new GitHub repo for this project",
-        help="Requires GITHUB_TOKEN. If GITHUB_REPO is already set in .env, that repo will be used instead."
+        help="Requires GITHUB_TOKEN. Only used when project mode is detected."
     )
-if mode == "learning":
+with col_cb2:
     use_calendar = st.checkbox(
         "Add events to Google Calendar",
-        help="Requires GOOGLE_CREDENTIALS_PATH and GOOGLE_CALENDAR_ID to be set."
+        help="Requires GOOGLE_CREDENTIALS_PATH and GOOGLE_CALENDAR_ID. Only used when learning mode is detected."
     )
 
 col1, col2, col3 = st.columns([1, 1, 6])
@@ -63,11 +56,16 @@ with col1:
 with col2:
     if st.button("CLEAR"):
         st.session_state.pop("result", None)
+        st.session_state.pop("detected_mode", None)
         st.rerun()
 
 if run and query:
-    with st.spinner("Researching..."):
-        try:
+    try:
+        with st.spinner("Detecting mode..."):
+            mode = detect_mode(query)
+        st.session_state["detected_mode"] = mode
+
+        with st.spinner("Researching..."):
             graph = build_project_graph() if mode == "project" else build_learning_graph()
             result = graph.invoke({
                 "query": query,
@@ -78,11 +76,16 @@ if run and query:
                 "messages": [HumanMessage(content=query)]
             })
             st.session_state["result"] = result
-        except Exception as e:
-            st.error(f"Error: {e}")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 if "result" in st.session_state:
     result = st.session_state["result"]
+
+    detected_mode = st.session_state.get("detected_mode", "")
+    if detected_mode:
+        label = "🛠 Project" if detected_mode == "project" else "📚 Learning"
+        st.markdown(f'<span class="source-tag">{label}</span>', unsafe_allow_html=True)
 
     st.markdown("#### Summary")
     st.markdown(f'<div class="result-box">{result.get("summary", "")}</div>', unsafe_allow_html=True)
@@ -126,6 +129,56 @@ if "result" in st.session_state:
         st.markdown("#### GitHub Issues")
         for issue in github_issues:
             st.markdown(f"- [#{issue['number']} {issue['title']}]({issue['url']})")
+
+    scaffold = result.get("scaffold", [])
+    if scaffold:
+        st.markdown("#### Project Scaffold")
+        language = result.get("language", "python").lower()
+
+        # File tree
+        tree_lines = []
+        dirs_seen = set()
+        for entry in scaffold:
+            parts = entry["filepath"].split("/")
+            for depth in range(len(parts) - 1):
+                dir_path = "/".join(parts[: depth + 1])
+                if dir_path not in dirs_seen:
+                    dirs_seen.add(dir_path)
+                    tree_lines.append("  " * depth + f"📁 {parts[depth]}/")
+            indent = "  " * (len(parts) - 1)
+            tree_lines.append(f"{indent}📄 {parts[-1]}")
+        st.code("\n".join(tree_lines), language=None)
+
+        # Per-file expanders
+        for entry in scaffold:
+            ext = entry["filepath"].rsplit(".", 1)[-1] if "." in entry["filepath"] else language
+            lang_map = {"ts": "typescript", "tsx": "tsx", "js": "javascript", "jsx": "jsx",
+                        "py": "python", "go": "go", "rs": "rust", "java": "java",
+                        "yaml": "yaml", "yml": "yaml", "json": "json", "md": "markdown",
+                        "toml": "toml", "env": "bash", "sh": "bash", "sql": "sql",
+                        "html": "html", "css": "css"}
+            code_lang = lang_map.get(ext, language)
+            with st.expander(f"`{entry['filepath']}` — {entry.get('purpose', '')}"):
+                st.code(entry.get("code", ""), language=code_lang)
+
+        zip_buffer = None
+        try:
+            import io, zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for entry in scaffold:
+                    zf.writestr(entry["filepath"], entry.get("code", ""))
+            buf.seek(0)
+            zip_buffer = buf
+        except Exception:
+            pass
+        if zip_buffer:
+            st.download_button(
+                label="Download scaffold as ZIP",
+                data=zip_buffer,
+                file_name="scaffold.zip",
+                mime="application/zip",
+            )
 
     readme = result.get("readme", "")
     if readme:
