@@ -424,16 +424,30 @@ class TestGithubIssuesNode:
 # _generate_issues_from_scaffold
 # ---------------------------------------------------------------------------
 
+def _make_chain_mock(invoke_return):
+    """
+    Build a chain mock that survives `chain | JsonOutputParser()`.
+
+    The real chain is `PromptTemplate | get_llm() | JsonOutputParser()`.
+    We mock `PromptTemplate.return_value.__or__` to return `chain`, but then
+    `chain | JsonOutputParser()` calls `chain.__or__` again. Setting
+    `chain.__or__ = MagicMock(return_value=chain)` makes the second `|` a no-op,
+    so `chain.invoke(...)` is always called and `invoke_return` is the final output.
+    `invoke_return` should be the already-parsed result (list/dict), since
+    `JsonOutputParser` is bypassed.
+    """
+    chain = MagicMock()
+    chain.invoke.return_value = invoke_return
+    chain.__or__ = MagicMock(return_value=chain)
+    return chain
+
+
 class TestGenerateIssuesFromScaffold:
     @patch("agents.nodes.github_issues.get_llm")
     def test_returns_parsed_issues(self, mock_get_llm):
         issues = [{"title": "Write tests", "description": "Add unit tests", "priority": "high"}]
-        llm_response = MagicMock()
-        llm_response.content = '[{"title": "Write tests", "description": "Add unit tests", "priority": "high"}]'
-        chain = MagicMock()
-        chain.invoke.return_value = llm_response
-        mock_llm = MagicMock()
-        mock_get_llm.return_value = mock_llm
+        chain = _make_chain_mock(issues)
+        mock_get_llm.return_value = MagicMock()
 
         with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
             mock_pt.return_value.__or__ = MagicMock(return_value=chain)
@@ -442,13 +456,10 @@ class TestGenerateIssuesFromScaffold:
         assert result == issues
 
     @patch("agents.nodes.github_issues.get_llm")
-    def test_returns_empty_list_on_invalid_json(self, mock_get_llm):
-        llm_response = MagicMock()
-        llm_response.content = "not valid json at all"
-        chain = MagicMock()
-        chain.invoke.return_value = llm_response
-        mock_llm = MagicMock()
-        mock_get_llm.return_value = mock_llm
+    def test_returns_empty_list_on_exception(self, mock_get_llm):
+        chain = _make_chain_mock(None)
+        chain.invoke.side_effect = Exception("LLM error")
+        mock_get_llm.return_value = MagicMock()
 
         with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
             mock_pt.return_value.__or__ = MagicMock(return_value=chain)
@@ -457,28 +468,20 @@ class TestGenerateIssuesFromScaffold:
         assert result == []
 
     @patch("agents.nodes.github_issues.get_llm")
-    def test_strips_markdown_fences(self, mock_get_llm):
-        llm_response = MagicMock()
-        llm_response.content = '```json\n[{"title": "T", "description": "D", "priority": "low"}]\n```'
-        chain = MagicMock()
-        chain.invoke.return_value = llm_response
-        mock_llm = MagicMock()
-        mock_get_llm.return_value = mock_llm
+    def test_returns_empty_list_when_chain_returns_non_list(self, mock_get_llm):
+        chain = _make_chain_mock({"title": "single issue"})
+        mock_get_llm.return_value = MagicMock()
 
         with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
             mock_pt.return_value.__or__ = MagicMock(return_value=chain)
             result = _generate_issues_from_scaffold("proj", [])
 
-        assert result == [{"title": "T", "description": "D", "priority": "low"}]
+        assert result == []
 
     @patch("agents.nodes.github_issues.get_llm")
-    def test_returns_empty_list_when_llm_returns_non_list(self, mock_get_llm):
-        llm_response = MagicMock()
-        llm_response.content = '{"title": "single issue"}'
-        chain = MagicMock()
-        chain.invoke.return_value = llm_response
-        mock_llm = MagicMock()
-        mock_get_llm.return_value = mock_llm
+    def test_returns_empty_list_when_chain_returns_empty_list(self, mock_get_llm):
+        chain = _make_chain_mock([])
+        mock_get_llm.return_value = MagicMock()
 
         with patch("agents.nodes.github_issues.PromptTemplate") as mock_pt:
             mock_pt.return_value.__or__ = MagicMock(return_value=chain)

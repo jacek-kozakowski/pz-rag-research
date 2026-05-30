@@ -21,14 +21,16 @@ _GET_LLM_TARGETS = [
 ]
 
 # State fields consumed sequentially by each LLM call (in graph execution order).
-# language="Python" is pre-set so scaffolding._detect_language is skipped.
 #
-# With create_repo=True  (8 responses): [0..7]
-# With create_repo=False, GITHUB_REPO set, scaffold non-empty (6 responses): [0..5] (skip repo slug)
-# Without GITHUB_TOKEN / no GITHUB_REPO (5 responses): [0..4] (github_issues_node skips all LLM)
+# scaffolding_node makes TWO LLM calls: _detect_stack (returns a dict) + scaffold chain (returns a list).
+#
+# Without GITHUB_TOKEN (6 responses): research, summary, tasks, detect_stack, scaffold, readme
+# With GITHUB_TOKEN + GITHUB_REPO (6 responses): same (no repo slug, no issue generation from LLM)
+# With create_repo=True (8 responses): + repo_slug + issues
 _R_RESEARCH = "I have gathered enough context to proceed."
 _R_SUMMARY = "An AI assistant project that helps users automate workflows."
 _R_TASKS = '[{"title":"Set up CI","description":"Configure GitHub Actions","priority":"high","duration_minutes":60,"deadline":"2026-06-01","start_time":"09:00"}]'
+_R_DETECT_STACK = '{"primary_language":"Python","stack":["Python"],"is_fullstack":false}'
 _R_SCAFFOLD = '[{"filepath":"main.py","purpose":"Entry point","code":"def main(): pass"}]'
 _R_REPO_SLUG = "ai-assistant"
 _R_ISSUES = '[{"title":"Write tests","description":"Add unit tests for main.py","priority":"high"}]'
@@ -97,7 +99,7 @@ def _run_graph(state_overrides=None, responses=None, env_overrides=None, extra_p
 
 class TestProjectFlowE2E:
     def test_full_flow_produces_github_issues(self):
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_SCAFFOLD, _R_REPO_SLUG, _R_ISSUES, _R_README]
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, _R_SCAFFOLD, _R_REPO_SLUG, _R_ISSUES, _R_README]
 
         mock_get = _mock_response(200, {"login": "testuser"})
         mock_posts = [
@@ -129,8 +131,8 @@ class TestProjectFlowE2E:
         assert issues[0]["url"] == "https://github.com/testuser/ai-assistant/issues/1"
 
     def test_full_flow_no_token_skips_github(self):
-        # Without GITHUB_TOKEN github_issues_node returns early → 5 LLM calls (no issues calls)
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_SCAFFOLD, _R_README]
+        # Without GITHUB_TOKEN github_issues_node returns early → 6 LLM calls (no issues calls)
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, _R_SCAFFOLD, _R_README]
 
         with patch("agents.nodes.github_issues.requests.post") as mock_post:
             result = _run_graph(
@@ -143,7 +145,7 @@ class TestProjectFlowE2E:
         assert result["github_issues"] == []
 
     def test_full_flow_scaffold_populated_by_scaffolding_node(self):
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_SCAFFOLD, _R_REPO_SLUG, _R_ISSUES, _R_README]
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, _R_SCAFFOLD, _R_REPO_SLUG, _R_ISSUES, _R_README]
 
         result = _run_graph(
             state_overrides={"create_repo": True},
@@ -169,7 +171,7 @@ class TestProjectFlowE2E:
         assert scaffold[0]["purpose"] == "Entry point"
 
     def test_full_flow_summary_propagated_from_summarization_node(self):
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_SCAFFOLD, _R_README]
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, _R_SCAFFOLD, _R_README]
 
         result = _run_graph(
             responses=responses,
@@ -179,7 +181,7 @@ class TestProjectFlowE2E:
         assert result["summary"] == _R_SUMMARY
 
     def test_full_flow_readme_populated_by_readme_node(self):
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_SCAFFOLD, _R_README]
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, _R_SCAFFOLD, _R_README]
 
         result = _run_graph(
             responses=responses,
@@ -190,7 +192,7 @@ class TestProjectFlowE2E:
 
     def test_full_flow_tasks_used_when_scaffold_empty(self):
         """When scaffold is empty, github_issues_node falls back to state['tasks']."""
-        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, "[]", _R_README]
+        responses = [_R_RESEARCH, _R_SUMMARY, _R_TASKS, _R_DETECT_STACK, "[]", _R_README]
 
         mock_post = MagicMock(return_value=_mock_response(201, {
             "number": 2, "title": "Set up CI",
