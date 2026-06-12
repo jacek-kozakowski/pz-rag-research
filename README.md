@@ -1,6 +1,6 @@
 # RAGResearch
 
-Multi-agentowy system RAG zbudowany na LangGraph. Przyjmuje zapytanie użytkownika, bada je (web + lokalne dokumenty) i generuje ustrukturyzowany plan projektu lub notatki edukacyjne.
+Wieloagentowy system RAG zbudowany na LangGraph. Przyjmuje prompt użytkownika, bada go (web + lokalne dokumenty) i generuje ustrukturyzowany plan projektu lub notatki do nauki.
 
 ---
 
@@ -65,7 +65,7 @@ Generuje ustrukturyzowane notatki z zaindeksowanych dokumentów lub internetu.
 
 ```
 detect_intent → local_files: notes → task_planner → END
-             └→ research:   research_agent → summarization → task_planner → (calendar →)? notes → END
+             └→ research:   research_agent → summarization → task_planner → calendar → notes → END
 ```
 
 - **`local_files`** — zapytanie dotyczy zaindeksowanych plików kursowych → notatki generowane metodą map-reduce z pełnego tekstu dokumentów
@@ -79,7 +79,7 @@ detect_intent → local_files: notes → task_planner → END
 
 ```
 RAGResearch/
-├── .env                            # sekrety (na podstawie .env.example)
+├── .env                            # na podstawie .env.example
 ├── requirements.txt
 ├── main.py                         # punkt wejścia CLI
 │
@@ -197,7 +197,7 @@ Priorytet dostawcy: **OpenAI → Groq → Ollama**. Rzuca `ValueError` gdy żade
 - **`research`** — dokumenty użytkownika (PDF, DOCX, TXT), przechowywane w `./chroma_research`
 - **`code`** — pliki kodu źródłowego, przechowywane w `./chroma_code`
 
-> ⚠ Mieszanie modeli embeddingów w tej samej kolekcji powoduje `ValueError`. Usuń katalog ChromaDB i przeindeksuj jeśli zmieniasz dostawcę.
+> Mieszanie modeli embeddingów w tej samej kolekcji powoduje `ValueError`. Usuń katalog ChromaDB i przeindeksuj jeśli zmieniasz dostawcę.
 
 ### `find_relevant_sources` — dwurundowe wyszukiwanie
 1. Runda 1: szerokie wyszukiwanie k=30, wybiera pliki z ≥10 trafieniami poniżej odległości cosinusowej 0.6 (dominujące)
@@ -250,7 +250,7 @@ Kolejność: kod → testy → dokumentacja.
 
 ## UI Streamlit (`ui/`)
 
-Live streaming węzłów grafu przez `graph.stream(..., stream_mode="updates")`.
+Live streaming węzłów grafu przez `graph.stream(..., stream_mode="debug")`.
 
 **Funkcje sidebara:**
 - Upload i indeksowanie plików (PDF, DOCX, TXT lub kod źródłowy) do kolekcji Research lub Code
