@@ -90,11 +90,15 @@ if run and query:
 
         result = {}
         with st.status("Starting...", expanded=True) as status:
-            for chunk in graph.stream(input_state, stream_mode="updates"):
-                for node_name, node_output in chunk.items():
-                    label = _NODE_LABELS.get(node_name, node_name)
+            for chunk in graph.stream(input_state, stream_mode="debug"):
+                payload = chunk.get("payload", {})
+                node_name = payload.get("name")
+                label = _NODE_LABELS.get(node_name, node_name)
+                if chunk.get("type") == "task":
                     status.update(label=f"{label}...")
+                elif chunk.get("type") == "task_result":
                     st.write(f"✓ {label}")
+                    node_output = payload.get("result")
                     if isinstance(node_output, dict):
                         result.update(node_output)
             status.update(label="Done!", state="complete", expanded=False)

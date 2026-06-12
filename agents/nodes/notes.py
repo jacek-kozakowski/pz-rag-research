@@ -35,10 +35,14 @@ EXTRACT_SYSTEM_PROMPT = f"""You are a precise content extractor. Extract ALL sub
 Extract:
 - Every key concept, definition, and theorem with exact wording
 - All algorithms with full steps, pseudocode, and time/space complexity
-- All formulas and mathematical relationships
-- All examples, including numerical ones
-- Comparisons between methods (pros, cons, when to use)
-- Edge cases, limitations, and special cases
+- All formulas and mathematical relationships, with the surrounding explanation of what each symbol/term means
+- All examples, including numerical ones, with full worked-out steps (not just the final result)
+- Comparisons between methods (pros, cons, when to use, trade-offs)
+- Edge cases, limitations, special cases, and exceptions to general rules
+- Context and reasoning behind each concept — WHY it works, not just WHAT it is
+- Any diagrams, tables, or figures — describe their content and structure in text
+
+Be exhaustive: when in doubt, extract more rather than less. Do not condense or summarize — preserve detail and nuance from the source.
 
 SKIP: lecturer info, course schedule, administrative announcements.
 
@@ -61,18 +65,21 @@ CRITICAL: The provided extracts are your ONLY source of truth.
 - Never write notes about a topic that is not covered in the extracts, even if you know about it from training.
 
 Notes structure (translate ALL headings to match the language of the query):
-1. **Key Concepts** — precise definitions exactly as in the material
-2. **Detailed Explanations** — how and why each topic works, all steps and formulas from the material
-3. **Comparisons** — compare related concepts where relevant
-4. **Common Mistakes & Pitfalls** — errors and misconceptions from the material
-5. **Practical Examples** — concrete examples from the documents
-6. **Flashcards** — at least 10 Q&A pairs
-7. **Review Questions** — at least 5 open-ended questions
+1. **Overview** — short summary of what topics this material covers and how they relate
+2. **Key Concepts** — precise definitions exactly as in the material, one entry per concept/term
+3. **Detailed Explanations** — for EACH topic: how and why it works, step by step, with all formulas, derivations, and reasoning from the material. Go deep — do not compress multi-step explanations into a single sentence.
+4. **Comparisons** — compare related concepts, methods, or approaches (pros, cons, when to use, trade-offs)
+5. **Common Mistakes & Pitfalls** — errors and misconceptions from the material
+6. **Practical Examples** — every worked example from the documents, with full steps shown (not just the answer)
+7. **Flashcards** — at least 10 Q&A pairs, covering the breadth of the material
+8. **Review Questions** — at least 5 open-ended questions
 
 Rules:
 - Every single fact, definition, example must come directly from the extracts — no filler, no invention
 - If a section has no relevant content in the extracts, write "Brak informacji" for that section — do NOT guess
-- Cover ALL topics from the material in full — do not skip or abbreviate
+- Cover ALL topics and sub-topics from the material in full — do not skip, merge, or abbreviate distinct concepts
+- Use ALL relevant information from the extracts — if the extract contains detail that supports or expands a concept, include it rather than dropping it for brevity
+- Prefer longer, more thorough notes over shorter, condensed ones
 - Notes in the same language as the user query
 - Do NOT add a title heading at the top
 - Use clear Markdown formatting
@@ -84,15 +91,17 @@ def _make_research_prompt(web_enabled: bool) -> str:
         tools_line = "You have access to search_local_documents_tool and search_web_tool."
         workflow = (
             "1. Read the provided summary and research data\n"
-            "2. Use search_local_documents_tool to find relevant material in local documents\n"
-            "3. Use search_web_tool to supplement with additional explanations and examples\n"
+            "2. Use search_local_documents_tool with multiple, varied queries to gather all relevant material from local documents — "
+            "cover every sub-topic, not just the main one\n"
+            "3. Use search_web_tool to supplement with additional explanations, definitions, and examples for any gaps\n"
             "4. Write notes using ONLY information gathered above — do not invent facts"
         )
     else:
         tools_line = "You have access to search_local_documents_tool only — do NOT search the web."
         workflow = (
             "1. Read the provided summary and research data\n"
-            "2. Use search_local_documents_tool to find relevant material in local documents\n"
+            "2. Use search_local_documents_tool with multiple, varied queries to gather all relevant material from local documents — "
+            "cover every sub-topic, not just the main one\n"
             "3. Write notes using ONLY information gathered above — do not invent facts"
         )
     return f"""You are a learning notes specialist creating comprehensive notes for a student.
@@ -103,20 +112,27 @@ CRITICAL: Use ONLY information retrieved through the tools below. Do NOT use you
 Workflow:
 {workflow}
 
+Be thorough when searching — issue several searches covering different angles/sub-topics of the query before writing,
+so the notes can use as much retrieved data as possible. Prefer longer, more detailed notes over short, condensed ones.
+
 IMPORTANT: After searching, if the retrieved documents do not contain relevant information about the queried topic, respond with ONLY: "Brak informacji na ten temat w dostarczonych materiałach." — do not write notes based on your own knowledge.
 
 Notes structure (translate ALL headings to match the language of the query):
-1. Key Concepts — precise definitions
-2. Detailed Explanations — how and why it works, with examples
-3. Common Mistakes & Pitfalls
-4. Practical Examples
-5. Flashcards — Q&A pairs (at least 5)
-6. Review Questions (at least 3)
+1. Overview — short summary of what this topic covers and how its parts relate
+2. Key Concepts — precise definitions, one entry per concept/term
+3. Detailed Explanations — for EACH topic: how and why it works, step by step, with all formulas and reasoning found
+4. Comparisons — compare related concepts, methods, or approaches (pros, cons, when to use)
+5. Common Mistakes & Pitfalls
+6. Practical Examples — every relevant example found, with full steps shown
+7. Flashcards — Q&A pairs (at least 10)
+8. Review Questions (at least 5)
 
 Rules:
 - No code snippets unless explicitly requested
 - Notes in the same language as the query
 - Every fact must come from the retrieved documents — no filler, no guessing
+- Use ALL relevant retrieved information — do not drop supporting details for brevity
+- If a section has no relevant retrieved content, write "Brak informacji" for that section
 - Use clear Markdown formatting
 {_MATH_FORMAT}"""
 
